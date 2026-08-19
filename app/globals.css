@@ -10,7 +10,7 @@ body {
 }
 
 body {
-  background: #020202;
+  background: #030302;
   color: white;
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -20,166 +20,90 @@ input {
   font: inherit;
 }
 
-/* =========================
-   LUXURY CASINO BACKGROUND
-   ========================= */
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
 
 .casino {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(
-      ellipse at 50% 45%,
-      rgba(120, 78, 18, 0.22) 0%,
-      rgba(30, 18, 5, 0.18) 28%,
-      transparent 62%
-    ),
-    radial-gradient(
-      ellipse at 15% 15%,
-      rgba(180, 120, 30, 0.08),
-      transparent 35%
-    ),
-    radial-gradient(
-      ellipse at 85% 80%,
-      rgba(120, 15, 10, 0.10),
-      transparent 35%
-    ),
-    #020202;
+    radial-gradient(circle at center, #3a2108 0%, #100a04 35%, #030302 78%);
 }
-
-/* Golden moving atmosphere */
 
 .casino::before {
   content: "";
   position: absolute;
-  width: 700px;
-  height: 700px;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(230, 177, 62, 0.09),
-    transparent 65%
-  );
-  filter: blur(25px);
-  animation: atmosphere 9s ease-in-out infinite alternate;
-  pointer-events: none;
-}
-
-/* Subtle grid */
-
-.casino::after {
-  content: "";
-  position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(
-      rgba(255, 210, 100, 0.025) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      rgba(255, 210, 100, 0.025) 1px,
-      transparent 1px
-    );
-  background-size: 80px 80px;
-  mask-image: radial-gradient(
-    ellipse at center,
-    black,
-    transparent 75%
-  );
-  pointer-events: none;
+    radial-gradient(circle, rgba(255, 210, 100, 0.35) 1px, transparent 1px);
+  background-size: 70px 70px;
+  animation: starMove 18s linear infinite;
+  opacity: 0.25;
 }
-
-/* =========================
-   MOVING GOLDEN PARTICLES
-   ========================= */
 
 .stars::before,
 .stars::after {
-  content: "✦     ·       ✧          ·     ✦       ·        ✧";
+  content: "✦  ✧     ✦       ✧   ✦      ✧       ✦";
   position: absolute;
-  left: -30%;
-  width: 160%;
-  color: rgba(246, 211, 106, 0.45);
-  font-size: 15px;
-  letter-spacing: 32px;
+  color: rgba(255, 215, 120, 0.65);
+  font-size: 18px;
+  letter-spacing: 35px;
   white-space: nowrap;
-  animation: starsDrift 18s linear infinite;
+  animation: starsMove 12s linear infinite;
   pointer-events: none;
 }
 
-.stars::before {
-  top: 18%;
-}
-
 .stars::after {
-  top: 72%;
-  opacity: 0.3;
-  animation-duration: 27s;
-  animation-direction: reverse;
+  top: 65%;
+  animation-duration: 18s;
+  opacity: 0.45;
 }
-
-/* =========================
-   GOLDEN LIGHTS
-   ========================= */
 
 .glow {
   position: absolute;
-  width: 420px;
-  height: 420px;
+  width: 450px;
+  height: 450px;
   border-radius: 50%;
-  filter: blur(120px);
+  filter: blur(130px);
+  animation: glowMove 9s ease-in-out infinite alternate;
   pointer-events: none;
 }
 
 .glow1 {
-  top: -230px;
+  top: -220px;
   left: -180px;
-  background: rgba(232, 184, 74, 0.14);
-  animation: glowOne 10s ease-in-out infinite alternate;
+  background: rgba(240, 170, 40, 0.16);
 }
 
 .glow2 {
   right: -220px;
-  bottom: -230px;
-  background: rgba(130, 30, 12, 0.12);
-  animation: glowTwo 12s ease-in-out infinite alternate;
+  bottom: -220px;
+  background: rgba(150, 20, 10, 0.2);
+  animation-delay: 2s;
 }
-
-/* =========================
-   CONTENT
-   ========================= */
 
 .hero {
   position: relative;
-  z-index: 5;
+  z-index: 2;
   width: min(92%, 540px);
   margin: auto;
   padding: 55px 0;
   text-align: center;
 }
 
-/* =========================
-   LOGO
-   ========================= */
-
 .logo {
   color: #e8b84a;
   font-size: 24px;
   letter-spacing: 10px;
   margin-bottom: 20px;
-  text-shadow:
-    0 0 8px rgba(232, 184, 74, 0.8),
-    0 0 25px rgba(232, 184, 74, 0.4);
+  text-shadow: 0 0 30px rgba(232, 184, 74, 0.5);
 }
-
-/* =========================
-   FHDxNJD
-   ========================= */
 
 .brand-title {
   position: relative;
@@ -195,8 +119,6 @@ input {
     0 0 60px rgba(248, 212, 107, 0.35);
   overflow: hidden;
 }
-
-/* Moving shine across logo */
 
 .brand-title::after {
   content: "";
@@ -227,77 +149,211 @@ input {
   margin: 18px 0 30px;
 }
 
-/* =========================
-   CARD
-   ========================= */
-
 .join-card,
 .lobby {
-  position: relative;
   padding: 30px;
   border-radius: 26px;
-  border: 1px solid rgba(232, 184, 74, 0.28);
-  background:
-    linear-gradient(
-      145deg,
-      rgba(30, 20, 8, 0.78),
-      rgba(4, 4, 4, 0.88)
-    );
-  backdrop-filter: blur(22px);
+  border: 1px solid rgba(232, 184, 74, 0.3);
+  background: rgba(5, 4, 3, 0.78);
+  backdrop-filter: blur(20px);
   box-shadow:
     0 0 70px rgba(0, 0, 0, 0.8),
-    inset 0 0 40px rgba(232, 184, 74, 0.035);
+    inset 0 0 40px rgba(232, 184, 74, 0.04);
 }
 
-/* =========================
-   ANIMATIONS
-   ========================= */
-
-@keyframes atmosphere {
-  0% {
-    transform: translate(-50%, -50%) scale(0.85);
-    opacity: 0.55;
-  }
-
-  100% {
-    transform: translate(-50%, -50%) scale(1.25);
-    opacity: 1;
-  }
+.join-card label {
+  display: block;
+  text-align: left;
+  margin-bottom: 10px;
+  color: #d8b45b;
+  font-size: 11px;
+  letter-spacing: 3px;
 }
 
-@keyframes starsDrift {
-  0% {
-    transform: translateX(-10%) translateY(0);
-  }
-
-  50% {
-    transform: translateX(8%) translateY(25px);
-  }
-
-  100% {
-    transform: translateX(-10%) translateY(0);
-  }
+.join-card input {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 184, 74, 0.25);
+  outline: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
 }
 
-@keyframes glowOne {
-  0% {
-    transform: translate(0, 0) scale(1);
-  }
-
-  100% {
-    transform: translate(180px, 130px) scale(1.3);
-  }
+.join-card input:focus {
+  border-color: #e8b84a;
+  box-shadow: 0 0 25px rgba(232, 184, 74, 0.15);
 }
 
-@keyframes glowTwo {
-  0% {
-    transform: translate(0, 0) scale(1);
-  }
-
-  100% {
-    transform: translate(-160px, -100px) scale(1.25);
-  }
+.avatar-title {
+  margin: 25px 0 12px;
+  color: #d8b45b;
+  font-size: 11px;
+  letter-spacing: 3px;
 }
+
+.avatars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.avatar-choice {
+  height: 58px;
+  border: 1px solid rgba(232, 184, 74, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 28px;
+  transition: 0.2s;
+}
+
+.avatar-choice:hover {
+  transform: translateY(-3px);
+  border-color: #d8b45b;
+}
+
+.avatar-choice.selected {
+  border-color: #f5cf65;
+  background: rgba(232, 184, 74, 0.15);
+  box-shadow: 0 0 22px rgba(232, 184, 74, 0.25);
+}
+
+.selected-avatar {
+  width: 78px;
+  height: 78px;
+  margin: 20px auto;
+  border-radius: 50%;
+  border: 2px solid #d8b45b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  background: radial-gradient(circle, #3c270c, #100a03);
+  box-shadow: 0 0 35px rgba(232, 184, 74, 0.25);
+}
+
+.join-button {
+  width: 100%;
+  padding: 17px;
+  border: 0;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #a86f12, #f7d574, #a86f12);
+  color: #120b02;
+  font-weight: 900;
+  letter-spacing: 2px;
+  box-shadow: 0 8px 35px rgba(232, 184, 74, 0.2);
+  transition: 0.2s;
+}
+
+.join-button:not(:disabled):hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 45px rgba(232, 184, 74, 0.35);
+}
+
+.join-button:disabled {
+  opacity: 0.3;
+}
+
+.private {
+  margin-top: 18px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.players {
+  margin-top: 25px;
+  color: rgba(232, 184, 74, 0.4);
+  letter-spacing: 4px;
+  font-size: 10px;
+}
+
+/* Lobby */
+
+.lobby {
+  position: relative;
+  z-index: 3;
+  width: min(92%, 700px);
+  margin: 60px auto;
+  text-align: center;
+}
+
+.brand-small {
+  color: #f3ca61;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  margin-bottom: 30px;
+}
+
+.lobby-header {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+
+.lobby-header strong {
+  color: #e8b84a;
+}
+
+.lobby h2 {
+  color: #f4ce67;
+  letter-spacing: 5px;
+  margin: 35px 0;
+}
+
+.player-seat {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(232, 184, 74, 0.3);
+  background: rgba(232, 184, 74, 0.06);
+  text-align: left;
+}
+
+.seat-avatar {
+  width: 65px;
+  height: 65px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  background: #211505;
+  border: 2px solid #d8b45b;
+}
+
+.player-seat strong {
+  display: block;
+  color: white;
+}
+
+.player-seat span {
+  display: block;
+  color: #d8b45b;
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin-top: 5px;
+}
+
+.waiting {
+  margin: 35px 0;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.back-button {
+  padding: 13px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(232, 184, 74, 0.25);
+  background: transparent;
+  color: #d8b45b;
+}
+
+/* Animations */
 
 @keyframes shine {
   0% {
@@ -307,5 +363,35 @@ input {
   45%,
   100% {
     left: 130%;
+  }
+}
+
+@keyframes glowMove {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+
+  to {
+    transform: translate(90px, 70px) scale(1.3);
+  }
+}
+
+@keyframes starMove {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(70px);
+  }
+}
+
+@keyframes starsMove {
+  from {
+    transform: translateX(-20%);
+  }
+
+  to {
+    transform: translateX(100%);
   }
 }
