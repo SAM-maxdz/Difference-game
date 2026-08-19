@@ -1,6 +1,7 @@
 "use client";
-
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { db } from "../lib/firebase";
+import { ref, set, onValue, onDisconnect, remove } from "firebase/database";
 
 const avatars = [
   "/avatars/man1.PNG",
@@ -17,6 +18,61 @@ export default function Home() {
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState(avatars[0]);
   const [joined, setJoined] = useState(false);
+  const [players, setPlayers] = useState({});
+  const [gameStatus, setGameStatus] = useState("waiting");
+  const playerIdRef = useRef(null);
+
+  useEffect(() => {
+    let id = sessionStorage.getItem("playerId");
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem("playerId", id);
+    }
+    playerIdRef.current = id;
+  }, []);
+
+  useEffect(() => {
+    const playersRef = ref(db, "players");
+    const unsubscribe = onValue(playersRef, (snapshot) => {
+      setPlayers(snapshot.val() || {});
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const statusRef = ref(db, "game/status");
+    const unsubscribe = onValue(statusRef, (snapshot) => {
+      setGameStatus(snapshot.val() || "waiting");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (joined && gameStatus === "playing") {
+      window.location.href = "/game";
+    }
+  }, [joined, gameStatus]);
+
+  function handleJoin() {
+    const id = playerIdRef.current;
+    if (!id || !name.trim()) return;
+    const playerRef = ref(db, `players/${id}`);
+    set(playerRef, {
+      name: name.trim(),
+      avatar,
+      joinedAt: Date.now(),
+    });
+    onDisconnect(playerRef).remove();
+    setJoined(true);
+  }
+
+  function handleChangeInfo() {
+    const id = playerIdRef.current;
+    if (id) remove(ref(db, `players/${id}`));
+    setJoined(false);
+  }
+
+  const playersList = Object.entries(players);
 
   if (joined) {
     return (
@@ -24,35 +80,28 @@ export default function Home() {
         <div className="stars"></div>
         <div className="glow glow1"></div>
         <div className="glow glow2"></div>
-
         <section className="lobby">
           <div className="brand-small">FHDxNJD</div>
-
           <div className="lobby-header">
             <span>PRIVATE TABLE</span>
-            <strong>0 / 10 PLAYERS</strong>
+            <strong>{playersList.length} / 10 PLAYERS</strong>
           </div>
-
           <h2>WAITING LOBBY</h2>
-
-          <div className="player-seat">
-            <div className="seat-avatar">
-              <img src={avatar} alt="avatar" />
+          {playersList.map(([id, player]) => (
+            <div className="player-seat" key={id}>
+              <div className="seat-avatar">
+                <img src={player.avatar} alt="avatar" />
+              </div>
+              <div>
+                <strong>{player.name}</strong>
+                <span>{id === playerIdRef.current ? "YOU" : "PLAYER"}</span>
+              </div>
             </div>
-            <div>
-              <strong>{name}</strong>
-              <span>YOU</span>
-            </div>
-          </div>
-
+          ))}
           <div className="waiting">
             Waiting for the host to start the game...
           </div>
-
-          <button
-            className="back-button"
-            onClick={() => setJoined(false)}
-          >
+          <button className="back-button" onClick={handleChangeInfo}>
             CHANGE NAME / AVATAR
           </button>
         </section>
@@ -65,21 +114,15 @@ export default function Home() {
       <div className="stars"></div>
       <div className="glow glow1"></div>
       <div className="glow glow2"></div>
-
       <section className="hero">
         <div className="logo">♠ ♥ ♦ ♣</div>
-
         <h1 className="brand-title">
           <span className="brand-text">FHDxNJD</span>
         </h1>
-
         <div className="subtitle">PRIVATE GAME</div>
-
         <p>Wait for the host to start the game.</p>
-
         <div className="join-card">
           <label>اسم اللاعب</label>
-
           <input
             type="text"
             placeholder="Enter your name"
@@ -87,9 +130,7 @@ export default function Home() {
             onChange={(event) => setName(event.target.value)}
             maxLength={16}
           />
-
           <div className="avatar-title">اختر صورتك الرمزية</div>
-
           <div className="avatars">
             {avatars.map((item) => (
               <button
@@ -103,22 +144,18 @@ export default function Home() {
               </button>
             ))}
           </div>
-
           <div className="selected-avatar">
             <img src={avatar} alt="selected avatar" />
           </div>
-
           <button
             className="join-button"
             disabled={!name.trim()}
-            onClick={() => setJoined(true)}
+            onClick={handleJoin}
           >
             JOIN TABLE
           </button>
-
           <div className="private">🔒 PRIVATE ROOM</div>
         </div>
-
         <div className="players">UP TO 10 PLAYERS</div>
       </section>
     </main>
