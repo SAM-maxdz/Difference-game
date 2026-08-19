@@ -29,11 +29,11 @@ export default function Home() {
           <div className="brand-small">FHDxNJD</div>
 
           <div className="lobby-header">
-            <span>طاولة خاصة</span>
-            <strong>0 / 10 لاعبين</strong>
+            <span>PRIVATE TABLE</span>
+            <strong>0 / 10 PLAYERS</strong>
           </div>
 
-          <h2>غرفة الانتظار</h2>
+          <h2>WAITING LOBBY</h2>
 
           <div className="player-seat">
             <div className="seat-avatar">
@@ -41,19 +41,19 @@ export default function Home() {
             </div>
             <div>
               <strong>{name}</strong>
-              <span>أنت</span>
+              <span>YOU</span>
             </div>
           </div>
 
           <div className="waiting">
-            بانتظار أن يبدأ المضيف اللعبة...
+            Waiting for the host to start the game...
           </div>
 
           <button
             className="back-button"
             onClick={() => setJoined(false)}
           >
-            تغيير الاسم / الصورة
+            CHANGE NAME / AVATAR
           </button>
         </section>
       </main>
@@ -70,19 +70,19 @@ export default function Home() {
         <div className="logo">♠ ♥ ♦ ♣</div>
 
         <h1 className="brand-title">
-          <span>FHDxNJD</span>
+          <span className="brand-text">FHDxNJD</span>
         </h1>
 
-        <div className="subtitle">لعبة خاصة</div>
+        <div className="subtitle">PRIVATE GAME</div>
 
-        <p>اكتب اسمك وانتظر أن تبدأ اللعبة</p>
+        <p>Wait for the host to start the game.</p>
 
         <div className="join-card">
           <label>اسم اللاعب</label>
 
           <input
             type="text"
-            placeholder="اكتب اسمك"
+            placeholder="Enter your name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             maxLength={16}
@@ -113,13 +113,13 @@ export default function Home() {
             disabled={!name.trim()}
             onClick={() => setJoined(true)}
           >
-            انضم للطاولة
+            JOIN TABLE
           </button>
 
           <div className="private">🔒 PRIVATE ROOM</div>
         </div>
 
-        <div className="players">حتى 10 لاعبين</div>
+        <div className="players">UP TO 10 PLAYERS</div>
       </section>
     </main>
   );
