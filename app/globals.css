@@ -10,7 +10,7 @@ body {
 }
 
 body {
-  background: #050403;
+  background: #030302;
   color: white;
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -28,103 +28,144 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* Main Casino */
-
 .casino {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(
-      circle at 50% 45%,
-      rgba(150, 90, 15, 0.18),
-      transparent 35%
-    ),
-    radial-gradient(
-      circle at 10% 10%,
-      rgba(120, 20, 10, 0.15),
-      transparent 30%
-    ),
-    #050403;
+    radial-gradient(circle at center, #3a2108 0%, #100a04 35%, #030302 78%);
 }
 
-/* Moving casino symbols */
-
 .casino::before {
-  content: "♠   ♥   ♦   ♣   ♠   ♥   ♦   ♣   ♠   ♥   ♦   ♣";
+  content: "";
   position: absolute;
-  inset: -20%;
-  color: rgba(212, 160, 55, 0.045);
-  font-size: 70px;
-  line-height: 2.2;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, rgba(255, 210, 100, 0.35) 1px, transparent 1px);
+  background-size: 70px 70px;
+  animation: starMove 18s linear infinite;
+  opacity: 0.25;
+}
+
+.stars::before,
+.stars::after {
+  content: "✦  ✧     ✦       ✧   ✦      ✧       ✦";
+  position: absolute;
+  color: rgba(255, 215, 120, 0.65);
+  font-size: 18px;
   letter-spacing: 35px;
-  transform: rotate(-12deg);
-  animation: symbols 25s linear infinite;
+  white-space: nowrap;
+  animation: starsMove 12s linear infinite;
   pointer-events: none;
 }
 
-/* Main content */
+.stars::after {
+  top: 65%;
+  animation-duration: 18s;
+  opacity: 0.45;
+}
+
+.glow {
+  position: absolute;
+  width: 450px;
+  height: 450px;
+  border-radius: 50%;
+  filter: blur(130px);
+  animation: glowMove 9s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.glow1 {
+  top: -220px;
+  left: -180px;
+  background: rgba(240, 170, 40, 0.16);
+}
+
+.glow2 {
+  right: -220px;
+  bottom: -220px;
+  background: rgba(150, 20, 10, 0.2);
+  animation-delay: 2s;
+}
 
 .hero {
   position: relative;
   z-index: 2;
-  width: min(92%, 520px);
+  width: min(92%, 540px);
   margin: auto;
-  padding: 70px 0 40px;
+  padding: 55px 0;
   text-align: center;
 }
-
-/* Logo */
 
 .logo {
   color: #e8b84a;
   font-size: 24px;
-  letter-spacing: 8px;
-  margin-bottom: 25px;
-  text-shadow: 0 0 25px rgba(232, 184, 74, 0.35);
+  letter-spacing: 10px;
+  margin-bottom: 20px;
+  text-shadow: 0 0 30px rgba(232, 184, 74, 0.5);
 }
 
-.hero h1 {
+.brand-title {
+  position: relative;
+  display: inline-block;
   margin: 0;
-  color: #e8b84a;
-  font-size: clamp(34px, 8vw, 58px);
-  letter-spacing: 5px;
+  color: #f8d46b;
+  font-size: clamp(44px, 11vw, 75px);
   font-weight: 900;
+  letter-spacing: 5px;
   text-shadow:
-    0 0 15px rgba(232, 184, 74, 0.35),
-    0 0 40px rgba(232, 184, 74, 0.12);
+    0 0 8px #f8d46b,
+    0 0 25px rgba(248, 212, 107, 0.7),
+    0 0 60px rgba(248, 212, 107, 0.35);
+  overflow: hidden;
+}
+
+.brand-title::after {
+  content: "";
+  position: absolute;
+  top: -30%;
+  left: -80%;
+  width: 35%;
+  height: 160%;
+  transform: skewX(-20deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.95),
+    transparent
+  );
+  animation: shine 3s infinite;
 }
 
 .subtitle {
-  margin-top: 8px;
-  color: rgba(255, 255, 255, 0.45);
+  margin-top: 12px;
+  color: #d6b76a;
   letter-spacing: 7px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .hero > p {
-  color: rgba(255, 255, 255, 0.5);
-  margin: 18px 0 35px;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 18px 0 30px;
 }
 
-/* Join card */
-
-.join-card {
+.join-card,
+.lobby {
   padding: 30px;
-  border: 1px solid rgba(232, 184, 74, 0.28);
-  border-radius: 24px;
-  background: rgba(5, 4, 3, 0.72);
-  backdrop-filter: blur(18px);
+  border-radius: 26px;
+  border: 1px solid rgba(232, 184, 74, 0.3);
+  background: rgba(5, 4, 3, 0.78);
+  backdrop-filter: blur(20px);
   box-shadow:
-    0 0 60px rgba(0, 0, 0, 0.7),
-    inset 0 0 35px rgba(232, 184, 74, 0.035);
+    0 0 70px rgba(0, 0, 0, 0.8),
+    inset 0 0 40px rgba(232, 184, 74, 0.04);
 }
 
 .join-card label {
   display: block;
   text-align: left;
-  margin-bottom: 9px;
-  color: rgba(232, 184, 74, 0.75);
+  margin-bottom: 10px;
+  color: #d8b45b;
   font-size: 11px;
   letter-spacing: 3px;
 }
@@ -133,114 +174,197 @@ button:disabled {
   width: 100%;
   padding: 16px;
   border-radius: 12px;
-  border: 1px solid rgba(232, 184, 74, 0.2);
+  border: 1px solid rgba(232, 184, 74, 0.25);
   outline: none;
-  color: white;
   background: rgba(255, 255, 255, 0.05);
+  color: white;
 }
 
 .join-card input:focus {
-  border-color: rgba(232, 184, 74, 0.8);
-  box-shadow: 0 0 20px rgba(232, 184, 74, 0.08);
+  border-color: #e8b84a;
+  box-shadow: 0 0 25px rgba(232, 184, 74, 0.15);
 }
 
 .avatar-title {
-  margin-top: 22px;
-  margin-bottom: 10px;
-  color: rgba(232, 184, 74, 0.75);
+  margin: 25px 0 12px;
+  color: #d8b45b;
   font-size: 11px;
   letter-spacing: 3px;
 }
 
-.avatar {
-  width: 75px;
-  height: 75px;
-  margin: 0 auto;
+.avatars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.avatar-choice {
+  height: 58px;
+  border: 1px solid rgba(232, 184, 74, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 28px;
+  transition: 0.2s;
+}
+
+.avatar-choice:hover {
+  transform: translateY(-3px);
+  border-color: #d8b45b;
+}
+
+.avatar-choice.selected {
+  border-color: #f5cf65;
+  background: rgba(232, 184, 74, 0.15);
+  box-shadow: 0 0 22px rgba(232, 184, 74, 0.25);
+}
+
+.selected-avatar {
+  width: 78px;
+  height: 78px;
+  margin: 20px auto;
   border-radius: 50%;
-  border: 2px solid rgba(232, 184, 74, 0.5);
-  background: linear-gradient(
-    135deg,
-    rgba(232, 184, 74, 0.2),
-    rgba(100, 20, 10, 0.4)
-  );
+  border: 2px solid #d8b45b;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 35px;
-  box-shadow: 0 0 30px rgba(232, 184, 74, 0.15);
+  font-size: 38px;
+  background: radial-gradient(circle, #3c270c, #100a03);
+  box-shadow: 0 0 35px rgba(232, 184, 74, 0.25);
 }
 
-/* Join button */
-
-.join-card button {
+.join-button {
   width: 100%;
-  margin-top: 20px;
-  padding: 16px;
+  padding: 17px;
   border: 0;
-  border-radius: 12px;
-  color: #140d02;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #a86f12, #f7d574, #a86f12);
+  color: #120b02;
   font-weight: 900;
   letter-spacing: 2px;
-  background: linear-gradient(
-    135deg,
-    #b77a17,
-    #f4d477,
-    #b77a17
-  );
-  box-shadow: 0 8px 30px rgba(183, 122, 23, 0.2);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+  box-shadow: 0 8px 35px rgba(232, 184, 74, 0.2);
+  transition: 0.2s;
 }
 
-.join-card button:not(:disabled):hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 35px rgba(183, 122, 23, 0.35);
+.join-button:not(:disabled):hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 45px rgba(232, 184, 74, 0.35);
 }
 
-.join-card button:disabled {
+.join-button:disabled {
   opacity: 0.3;
 }
 
 .private {
   margin-top: 18px;
   color: rgba(255, 255, 255, 0.3);
-  font-size: 11px;
+  font-size: 10px;
+  letter-spacing: 1px;
 }
 
 .players {
-  margin-top: 28px;
-  color: rgba(232, 184, 74, 0.35);
-  font-size: 11px;
+  margin-top: 25px;
+  color: rgba(232, 184, 74, 0.4);
   letter-spacing: 4px;
+  font-size: 10px;
 }
 
-/* Animated lights */
+/* Lobby */
 
-.glow {
-  position: absolute;
-  width: 420px;
-  height: 420px;
+.lobby {
+  position: relative;
+  z-index: 3;
+  width: min(92%, 700px);
+  margin: 60px auto;
+  text-align: center;
+}
+
+.brand-small {
+  color: #f3ca61;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  margin-bottom: 30px;
+}
+
+.lobby-header {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+
+.lobby-header strong {
+  color: #e8b84a;
+}
+
+.lobby h2 {
+  color: #f4ce67;
+  letter-spacing: 5px;
+  margin: 35px 0;
+}
+
+.player-seat {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(232, 184, 74, 0.3);
+  background: rgba(232, 184, 74, 0.06);
+  text-align: left;
+}
+
+.seat-avatar {
+  width: 65px;
+  height: 65px;
   border-radius: 50%;
-  filter: blur(120px);
-  pointer-events: none;
-  animation: glowMove 8s ease-in-out infinite alternate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  background: #211505;
+  border: 2px solid #d8b45b;
 }
 
-.glow1 {
-  top: -220px;
-  left: -180px;
-  background: rgba(218, 157, 38, 0.12);
+.player-seat strong {
+  display: block;
+  color: white;
 }
 
-.glow2 {
-  right: -220px;
-  bottom: -200px;
-  background: rgba(130, 20, 10, 0.16);
-  animation-delay: 2s;
+.player-seat span {
+  display: block;
+  color: #d8b45b;
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin-top: 5px;
+}
+
+.waiting {
+  margin: 35px 0;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.back-button {
+  padding: 13px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(232, 184, 74, 0.25);
+  background: transparent;
+  color: #d8b45b;
 }
 
 /* Animations */
+
+@keyframes shine {
+  0% {
+    left: -80%;
+  }
+
+  45%,
+  100% {
+    left: 130%;
+  }
+}
 
 @keyframes glowMove {
   from {
@@ -248,16 +372,26 @@ button:disabled {
   }
 
   to {
-    transform: translate(80px, 60px) scale(1.25);
+    transform: translate(90px, 70px) scale(1.3);
   }
 }
 
-@keyframes symbols {
+@keyframes starMove {
   from {
-    transform: translateY(0) rotate(-12deg);
+    transform: translateY(0);
   }
 
   to {
-    transform: translateY(180px) rotate(-12deg);
+    transform: translateY(70px);
+  }
+}
+
+@keyframes starsMove {
+  from {
+    transform: translateX(-20%);
+  }
+
+  to {
+    transform: translateX(100%);
   }
 }
