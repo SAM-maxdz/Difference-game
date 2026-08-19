@@ -29,11 +29,11 @@ export default function Home() {
           <div className="brand-small">FHDxNJD</div>
 
           <div className="lobby-header">
-            <span>PRIVATE TABLE</span>
-            <strong>0 / 10 PLAYERS</strong>
+            <span>طاولة خاصة</span>
+            <strong>0 / 10 لاعبين</strong>
           </div>
 
-          <h2>WAITING LOBBY</h2>
+          <h2>غرفة الانتظار</h2>
 
           <div className="player-seat">
             <div className="seat-avatar">
@@ -41,19 +41,19 @@ export default function Home() {
             </div>
             <div>
               <strong>{name}</strong>
-              <span>YOU</span>
+              <span>أنت</span>
             </div>
           </div>
 
           <div className="waiting">
-            Waiting for the host to start the game...
+            بانتظار أن يبدأ المضيف اللعبة...
           </div>
 
           <button
             className="back-button"
             onClick={() => setJoined(false)}
           >
-            CHANGE NAME / AVATAR
+            تغيير الاسم / الصورة
           </button>
         </section>
       </main>
@@ -73,22 +73,22 @@ export default function Home() {
           <span>FHDxNJD</span>
         </h1>
 
-        <div className="subtitle">PRIVATE GAME</div>
+        <div className="subtitle">لعبة خاصة</div>
 
-        <p>Enter the table and prepare for the challenge.</p>
+        <p>اكتب اسمك وانتظر أن تبدأ اللعبة</p>
 
         <div className="join-card">
-          <label>PLAYER NAME</label>
+          <label>اسم اللاعب</label>
 
           <input
             type="text"
-            placeholder="Enter your name"
+            placeholder="اكتب اسمك"
             value={name}
             onChange={(event) => setName(event.target.value)}
             maxLength={16}
           />
 
-          <div className="avatar-title">CHOOSE YOUR AVATAR</div>
+          <div className="avatar-title">اختر صورتك الرمزية</div>
 
           <div className="avatars">
             {avatars.map((item) => (
@@ -113,15 +113,13 @@ export default function Home() {
             disabled={!name.trim()}
             onClick={() => setJoined(true)}
           >
-            JOIN TABLE
+            انضم للطاولة
           </button>
 
-          <div className="private">
-            🔒 PRIVATE ROOM • NO ACCOUNT REQUIRED
-          </div>
+          <div className="private">🔒 PRIVATE ROOM</div>
         </div>
 
-        <div className="players">UP TO 10 PLAYERS</div>
+        <div className="players">حتى 10 لاعبين</div>
       </section>
     </main>
   );
