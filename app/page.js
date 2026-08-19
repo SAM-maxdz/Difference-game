@@ -2,11 +2,20 @@
 
 import { useState } from "react";
 
-const avatars = ["🎩", "😎", "🕶️", "👑", "🎭", "🃏", "💎", "🐯"];
+const avatars = [
+  "/avatars/man1.PNG",
+  "/avatars/man2.PNG",
+  "/avatars/man3.PNG",
+  "/avatars/man4.PNG",
+  "/avatars/woman1.PNG",
+  "/avatars/woman2.PNG",
+  "/avatars/woman3.PNG",
+  "/avatars/woman4.PNG",
+];
 
 export default function Home() {
   const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState("🎩");
+  const [avatar, setAvatar] = useState(avatars[0]);
   const [joined, setJoined] = useState(false);
 
   if (joined) {
@@ -27,7 +36,9 @@ export default function Home() {
           <h2>WAITING LOBBY</h2>
 
           <div className="player-seat">
-            <div className="seat-avatar">{avatar}</div>
+            <div className="seat-avatar">
+              <img src={avatar} alt="avatar" />
+            </div>
             <div>
               <strong>{name}</strong>
               <span>YOU</span>
@@ -88,13 +99,13 @@ export default function Home() {
                 }`}
                 onClick={() => setAvatar(item)}
               >
-                {item}
+                <img src={item} alt="avatar option" />
               </button>
             ))}
           </div>
 
           <div className="selected-avatar">
-            <span>{avatar}</span>
+            <img src={avatar} alt="selected avatar" />
           </div>
 
           <button
