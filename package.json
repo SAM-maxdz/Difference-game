@@ -7,6 +7,7 @@
   "dependencies": {
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "firebase": "^10.7.0"
   }
 }
