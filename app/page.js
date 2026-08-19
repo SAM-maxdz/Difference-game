@@ -1,52 +1,52 @@
-‏import { useState } from "react";
+"use client";
 
-‏export default function Home() {
-‏  const [name, setName] = useState("");
+import { useState } from "react";
 
-‏  return (
-‏    <main className="casino">
-‏      <div className="glow glow1"></div>
-‏      <div className="glow glow2"></div>
+export default function Home() {
+  const [name, setName] = useState("");
 
-‏      <section className="hero">
-‏        <div className="logo">♠ ♥ ♦ ♣</div>
+  return (
+    <main className="casino">
+      <div className="glow glow1"></div>
+      <div className="glow glow2"></div>
 
-‏        <h1>DIFFERENCE</h1>
+      <section className="hero">
+        <div className="logo">♠ ♥ ♦ ♣</div>
 
-‏        <div className="subtitle">THE GAME</div>
+        <h1>DIFFERENCE</h1>
 
-‏        <p>
-‏          Find the differences before time runs out.
-‏        </p>
+        <div className="subtitle">THE GAME</div>
 
-‏        <div className="join-card">
-‏          <label>PLAYER NAME</label>
+        <p>Find the differences before time runs out.</p>
 
-‏          <input
-‏            type="text"
-‏            placeholder="Enter your name"
-‏            value={name}
-‏            onChange={(e) => setName(e.target.value)}
-‏            maxLength={16}
+        <div className="join-card">
+          <label>PLAYER NAME</label>
+
+          <input
+            type="text"
+            placeholder="Enter your name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={16}
           />
 
-‏          <div className="avatar-title">YOUR AVATAR</div>
+          <div className="avatar-title">YOUR AVATAR</div>
 
-‏          <div className="avatar">🎩</div>
+          <div className="avatar">🎩</div>
 
-‏          <button disabled={!name.trim()}>
-‏            JOIN TABLE
-‏          </button>
+          <button disabled={!name.trim()}>
+            JOIN TABLE
+          </button>
 
-‏          <div className="private">
-‏            🔒 Private game • No account required
-‏          </div>
-‏        </div>
+          <div className="private">
+            🔒 Private game • No account required
+          </div>
+        </div>
 
-‏        <div className="players">
-‏          UP TO 10 PLAYERS
-‏        </div>
-‏      </section>
-‏    </main>
+        <div className="players">
+          UP TO 10 PLAYERS
+        </div>
+      </section>
+    </main>
   );
 }
