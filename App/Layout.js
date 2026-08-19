@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: "Difference Game",
   description: "A multiplayer spot-the-difference game",
