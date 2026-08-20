@@ -11,14 +11,18 @@ const REVEAL_BEFORE_LEADERBOARD = 10;
 export default function GamePage() {
   const [pairId, setPairId] = useState(null);
   const [pair, setPair] = useState(null);
-  const [startedAt, setStartedAt] = useState(null);
-  const [remaining, setRemaining] = useState(0);
 
+  const [startedAt, setStartedAt] = useState(null);
+  const [gameStatus, setGameStatus] = useState("waiting");
+  const [gameTimeLimit, setGameTimeLimit] = useState(null);
+
+  const [remaining, setRemaining] = useState(0);
   const [countdown, setCountdown] = useState(null);
 
   const [found, setFound] = useState({});
   const [attemptsLeft, setAttemptsLeft] =
     useState(ATTEMPTS_START);
+
   const [score, setScore] = useState(0);
 
   const [flashRed, setFlashRed] = useState(false);
@@ -40,13 +44,19 @@ export default function GamePage() {
   const correctSoundRef = useRef(null);
   const wrongSoundRef = useRef(null);
 
-  // ---------- رقم اللاعب ----------
+  // =====================================================
+  // رقم اللاعب
+  // =====================================================
+
   useEffect(() => {
     playerIdRef.current =
       sessionStorage.getItem("playerId");
   }, []);
 
-  // ---------- حالة اللعبة ----------
+  // =====================================================
+  // حالة اللعبة + الصورة + وقت الجولة
+  // =====================================================
+
   useEffect(() => {
     const gameRef = ref(db, "game");
 
@@ -62,15 +72,28 @@ export default function GamePage() {
         setStartedAt(
           data.startedAt || null
         );
+
+        setGameStatus(
+          data.status || "waiting"
+        );
+
+        setGameTimeLimit(
+          data.timeLimit || null
+        );
       }
     );
 
     return () => unsubscribe();
   }, []);
 
-  // ---------- العد التنازلي ----------
+  // =====================================================
+  // العد التنازلي 5 → 1
+  // =====================================================
+
   useEffect(() => {
     const gameRef = ref(db, "game");
+
+    let interval = null;
 
     const unsubscribe = onValue(
       gameRef,
@@ -82,44 +105,74 @@ export default function GamePage() {
           !data.countdownStartedAt
         ) {
           setCountdown(null);
+
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
+
           return;
         }
 
         const countdownStartedAt =
-          data.countdownStartedAt;
+          Number(
+            data.countdownStartedAt
+          );
 
         const updateCountdown = () => {
           const elapsed =
-            (Date.now() -
-              countdownStartedAt) /
-            1000;
+            Math.max(
+              0,
+              Date.now() -
+                countdownStartedAt
+            ) / 1000;
 
+          /*
+            5 → 4 → 3 → 2 → 1
+            وبعد انتهاء الـ5 ثواني تختفي
+          */
           const value =
-            5 - Math.floor(elapsed);
+            5 -
+            Math.floor(elapsed);
 
           if (value > 0) {
             setCountdown(value);
           } else {
             setCountdown(null);
+
+            if (interval) {
+              clearInterval(interval);
+              interval = null;
+            }
           }
         };
 
         updateCountdown();
 
-        const interval = setInterval(
-          updateCountdown,
-          100
-        );
-
-        return () =>
+        if (interval) {
           clearInterval(interval);
+        }
+
+        interval = setInterval(
+          updateCountdown,
+          50
+        );
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, []);
 
-  // ---------- بيانات الصور ----------
+  // =====================================================
+  // بيانات الصور
+  // =====================================================
+
   useEffect(() => {
     if (!pairId) return;
 
@@ -131,14 +184,19 @@ export default function GamePage() {
     const unsubscribe = onValue(
       pairRef,
       (snapshot) => {
-        setPair(snapshot.val());
+        setPair(
+          snapshot.val()
+        );
       }
     );
 
     return () => unsubscribe();
   }, [pairId]);
 
-  // ---------- تصفير الجولة الجديدة ----------
+  // =====================================================
+  // تصفير الجولة الجديدة
+  // =====================================================
+
   useEffect(() => {
     if (
       !pairId ||
@@ -189,42 +247,96 @@ export default function GamePage() {
     }
   }, [pairId, startedAt]);
 
-  // ---------- عداد الوقت ----------
+  // =====================================================
+  // عداد وقت اللعب
+  // =====================================================
+
   useEffect(() => {
+    /*
+      مهم:
+      لا نبدأ حساب وقت اللعب أثناء countdown.
+
+      startedAt هو وقت بداية اللعب الحقيقي
+      الذي يرسله المضيف بعد تجهيز العد التنازلي.
+    */
+
     if (
       !pair ||
-      !startedAt
+      !startedAt ||
+      gameStatus !== "playing"
     ) {
       return;
     }
 
-    const interval =
-      setInterval(() => {
-        const elapsed =
-          (Date.now() -
-            startedAt) /
-          1000;
+    const duration =
+      Number(
+        gameTimeLimit ||
+          pair.timeLimit ||
+          60
+      );
 
-        const rem =
-          Math.max(
-            0,
-            pair.timeLimit -
-              elapsed
-          );
+    let interval = null;
 
-        setRemaining(rem);
+    const updateTimer = () => {
+      const now = Date.now();
 
-        if (rem <= 0) {
-          setRoundEnded(true);
+      /*
+        حماية إضافية:
+        إذا وصل playing قبل startedAt بلحظات،
+        لا نسمح للعداد أن يبدأ من قيمة خاطئة.
+      */
+      const elapsedMs =
+        Math.max(
+          0,
+          now -
+            Number(startedAt)
+        );
+
+      const elapsed =
+        elapsedMs / 1000;
+
+      const rem =
+        Math.max(
+          0,
+          duration -
+            elapsed
+        );
+
+      setRemaining(rem);
+
+      if (rem <= 0) {
+        setRoundEnded(true);
+
+        if (interval) {
           clearInterval(interval);
+          interval = null;
         }
-      }, 250);
+      }
+    };
 
-    return () =>
-      clearInterval(interval);
-  }, [pair, startedAt]);
+    updateTimer();
 
-  // ---------- بعد نهاية الجولة ----------
+    interval = setInterval(
+      updateTimer,
+      100
+    );
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [
+    pair,
+    startedAt,
+    gameStatus,
+    gameTimeLimit,
+  ]);
+
+  // =====================================================
+  // بعد نهاية الجولة
+  // =====================================================
+
   useEffect(() => {
     if (!roundEnded) return;
 
@@ -241,7 +353,10 @@ export default function GamePage() {
       clearTimeout(t);
   }, [roundEnded]);
 
-  // ---------- اللاعبين ----------
+  // =====================================================
+  // اللاعبين
+  // =====================================================
+
   useEffect(() => {
     const playersRef =
       ref(db, "players");
@@ -286,7 +401,10 @@ export default function GamePage() {
       unsubscribe();
   }, []);
 
-  // ---------- الموسيقى ----------
+  // =====================================================
+  // الموسيقى
+  // =====================================================
+
   useEffect(() => {
     if (!musicRef.current) return;
 
@@ -302,7 +420,10 @@ export default function GamePage() {
     }
   }, [muted, pairId]);
 
-  // ---------- الأصوات ----------
+  // =====================================================
+  // الأصوات
+  // =====================================================
+
   const playSound = (audioRef) => {
     if (
       muted ||
@@ -319,12 +440,16 @@ export default function GamePage() {
       .catch(() => {});
   };
 
-  // ---------- الضغط على الصورة ----------
+  // =====================================================
+  // الضغط على الصورة
+  // =====================================================
+
   function handleImageClick(e) {
     if (
       locked ||
       roundEnded ||
       countdown !== null ||
+      gameStatus !== "playing" ||
       !pair
     ) {
       return;
@@ -365,7 +490,10 @@ export default function GamePage() {
       }
     );
 
-    // ---------- اختلاف صحيح ----------
+    // ===================================================
+    // اختلاف صحيح
+    // ===================================================
+
     if (hitIndex >= 0) {
       playSound(
         correctSoundRef
@@ -403,7 +531,10 @@ export default function GamePage() {
       }
     }
 
-    // ---------- ضغط خاطئ ----------
+    // ===================================================
+    // ضغط خاطئ
+    // ===================================================
+
     else {
       playSound(
         wrongSoundRef
@@ -412,7 +543,8 @@ export default function GamePage() {
       setFlashRed(true);
 
       setTimeout(
-        () => setFlashRed(false),
+        () =>
+          setFlashRed(false),
         300
       );
 
@@ -438,6 +570,10 @@ export default function GamePage() {
       }
     }
   }
+
+  // =====================================================
+  // بيانات اللاعبين
+  // =====================================================
 
   const playersList =
     Object.entries(players).map(
@@ -466,9 +602,15 @@ export default function GamePage() {
       .length ===
       pair.differences.length;
 
+  // =====================================================
+  // العرض
+  // =====================================================
+
   return (
     <main style={styles.page}>
+
       {/* ---------- خلفية الفيديو ---------- */}
+
       <video
         autoPlay
         loop
@@ -487,6 +629,7 @@ export default function GamePage() {
       />
 
       {/* ---------- الأصوات ---------- */}
+
       <audio
         ref={musicRef}
         loop
@@ -504,6 +647,7 @@ export default function GamePage() {
       />
 
       {/* ---------- زر الموسيقى ---------- */}
+
       <button
         style={styles.muteBtn}
         onClick={() =>
@@ -518,6 +662,7 @@ export default function GamePage() {
       </button>
 
       {/* ---------- إشعار دخول لاعب ---------- */}
+
       {joinToast && (
         <div
           style={
@@ -558,7 +703,7 @@ export default function GamePage() {
       )}
 
       {/* ================================================= */}
-      {/* انتظار اختيار الصور */}
+      {/* انتظار اللعبة */}
       {/* ================================================= */}
 
       {!pairId || !pair ? (
@@ -579,7 +724,11 @@ export default function GamePage() {
         </div>
       ) : (
         <>
-          {/* ---------- شريط المعلومات ---------- */}
+
+          {/* ================================================= */}
+          {/* شريط المعلومات */}
+          {/* ================================================= */}
+
           <div
             style={
               styles.topBar
@@ -639,7 +788,10 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* ---------- المقاعد العلوية ---------- */}
+          {/* ================================================= */}
+          {/* المقاعد العلوية */}
+          {/* ================================================= */}
+
           {!roundEnded && (
             <SeatRow
               seats={
@@ -653,7 +805,9 @@ export default function GamePage() {
           {/* ================================================= */}
 
           {roundEnded ? (
+
             showLeaderboard ? (
+
               <div
                 style={
                   styles.results
@@ -746,7 +900,9 @@ export default function GamePage() {
                   التالية...
                 </p>
               </div>
+
             ) : (
+
               <div
                 style={
                   styles.revealFade
@@ -841,8 +997,11 @@ export default function GamePage() {
                   )}
                 </div>
               </div>
+
             )
+
           ) : (
+
             /* ================================================= */
             /* الصور أثناء اللعب */
             /* ================================================= */
@@ -850,15 +1009,22 @@ export default function GamePage() {
             <div
               style={{
                 ...styles.imagesRow,
+
                 filter:
                   flashRed
                     ? "brightness(1.5) saturate(2)"
                     : "none",
+
+                /*
+                  الصور تكون مخفية أثناء العد
+                  وتظهر فور انتهاء العد.
+                */
                 opacity:
                   countdown !==
                   null
                     ? 0
                     : 1,
+
                 pointerEvents:
                   countdown !==
                   null
@@ -866,6 +1032,7 @@ export default function GamePage() {
                     : "auto",
               }}
             >
+
               <ImageBox
                 src={
                   pair.image1
@@ -911,10 +1078,14 @@ export default function GamePage() {
                   )
                 }
               />
+
             </div>
           )}
 
-          {/* ---------- المقاعد السفلية ---------- */}
+          {/* ================================================= */}
+          {/* المقاعد السفلية */}
+          {/* ================================================= */}
+
           {!roundEnded && (
             <SeatRow
               seats={
@@ -943,6 +1114,7 @@ export default function GamePage() {
                   : "🔒 خلصت محاولاتك، استنى نهاية الجولة"}
               </div>
             )}
+
         </>
       )}
 
@@ -983,6 +1155,7 @@ export default function GamePage() {
           </button>
         </div>
       )}
+
     </main>
   );
 }
@@ -1272,7 +1445,10 @@ const styles = {
       "1px solid rgba(232,184,74,0.3)",
   },
 
-  // ---------- العد التنازلي ----------
+  // =====================================================
+  // العد التنازلي
+  // =====================================================
+
   countdownOverlay: {
     position:
       "fixed",
@@ -1317,6 +1493,10 @@ const styles = {
     letterSpacing:
       2,
   },
+
+  // =====================================================
+  // المقاعد
+  // =====================================================
 
   seatRow: {
     display:
@@ -1392,6 +1572,10 @@ const styles = {
       "#aaa",
   },
 
+  // =====================================================
+  // الصور
+  // =====================================================
+
   imagesRow: {
     display:
       "flex",
@@ -1465,6 +1649,10 @@ const styles = {
       "0 0 15px rgba(0,255,136,0.6)",
   },
 
+  // =====================================================
+  // رسالة انتهاء المحاولات
+  // =====================================================
+
   lockedBanner: {
     textAlign:
       "center",
@@ -1479,6 +1667,10 @@ const styles = {
     animation:
       "none",
   },
+
+  // =====================================================
+  // التصنيف
+  // =====================================================
 
   results: {
     textAlign:
@@ -1529,6 +1721,10 @@ const styles = {
       "cover",
   },
 
+  // =====================================================
+  // التكبير
+  // =====================================================
+
   zoomOverlay: {
     position:
       "fixed",
@@ -1575,10 +1771,10 @@ const styles = {
   },
 };
 
-/*
-  نضيف Animation للعد التنازلي
-  إلى الصفحة عند تشغيلها.
-*/
+// =========================================================
+// Animation العد التنازلي
+// =========================================================
+
 if (
   typeof document !==
   "undefined"
