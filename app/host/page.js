@@ -59,13 +59,13 @@ export default function HostPage() {
       sessionStorage.setItem("hostAuthorized", "true");
       setError("");
     } else {
-      setError("كلمة السر غلط");
+      setError("كلمة المرور غير صحيحة");
     }
   }
 
   function startGame() {
     if (!selectedPairId) {
-      alert("اختار زوج صور أول");
+      alert("يرجى اختيار مجموعة صور أولاً");
       return;
     }
     set(ref(db, "game/currentPairId"), selectedPairId);
@@ -93,10 +93,10 @@ export default function HostPage() {
           padding: 20,
         }}
       >
-        <h2 style={{ color: "#f8d46b" }}>دخول المضيف</h2>
+        <h2 style={{ color: "#f8d46b" }}>تسجيل دخول المضيف</h2>
         <input
           type="password"
-          placeholder="كلمة السر"
+          placeholder="كلمة المرور"
           value={passwordInput}
           onChange={(e) => setPasswordInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleLogin()}
@@ -152,11 +152,11 @@ export default function HostPage() {
         ))}
       </ul>
 
-      <h2 style={{ color: "#f8d46b", marginTop: 30 }}>اختر زوج الصور</h2>
+      <h2 style={{ color: "#f8d46b", marginTop: 30 }}>اختر مجموعة الصور</h2>
       {pairsList.length === 0 ? (
         <p style={{ color: "#999" }}>
-          ماكاين حتى زوج صور محفوظ. روح لصفحة /admin/differences وأضف زوج
-          أول.
+          لا توجد أي مجموعة صور محفوظة. يرجى الانتقال إلى صفحة
+          /admin/differences لإضافة مجموعة صور جديدة.
         </p>
       ) : (
         <div
@@ -208,7 +208,7 @@ export default function HostPage() {
             cursor: "pointer",
           }}
         >
-          START GAME
+          بدء اللعبة
         </button>
         <button
           onClick={resetGame}
@@ -222,7 +222,7 @@ export default function HostPage() {
             cursor: "pointer",
           }}
         >
-          RESET
+          إعادة تعيين
         </button>
       </div>
     </main>
