@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { ref, push, set } from "firebase/database";
-import { db } from "@/lib/firebase";
+import { db } from "../../../lib/firebase";
 
 // أداة الأدمن: تحديد نقاط الاختلاف بالضغط على الصورة
 // ملاحظة مهمة: هذي الأداة ما ترفعش الصور لأي سيرفر.
@@ -32,7 +32,6 @@ export default function DifferencesAdmin() {
     setter({ file, url });
   };
 
-  // الضغط على الصورة اليسرى يضيف نقطة اختلاف جديدة
   const handleImageClick = useCallback(
     (e) => {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -99,8 +98,8 @@ export default function DifferencesAdmin() {
       await set(newPairRef, {
         level: Number(level),
         name: pairName,
-        image1: image1Path, // مثال: /pairs/salon/1.png
-        image2: image2Path, // مثال: /pairs/salon/2.png
+        image1: image1Path,
+        image2: image2Path,
         timeLimit: Number(timeLimit),
         differences: points.map(({ x, y, radius }) => ({ x, y, radius })),
         createdAt: Date.now(),
