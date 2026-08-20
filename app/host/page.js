@@ -5,6 +5,7 @@ import { db } from "../../lib/firebase";
 import { ref, onValue, set } from "firebase/database";
 
 const HOST_PASSWORD = "055105";
+const COUNTDOWN_SECONDS = 5;
 
 export default function HostPage() {
   const [authorized, setAuthorized] = useState(false);
@@ -18,23 +19,23 @@ export default function HostPage() {
 
   useEffect(() => {
     const saved = sessionStorage.getItem("hostAuthorized");
-    if (saved === "true") setAuthorized(true);
-  }, []);
 
-  useEffect(() => {
-    if (authorized) {
-      set(ref(db, "game/status"), "waiting");
+    if (saved === "true") {
+      setAuthorized(true);
     }
-  }, [authorized]);
+  }, []);
 
   useEffect(() => {
     if (!authorized) return;
 
     const playersRef = ref(db, "players");
 
-    const unsubscribe = onValue(playersRef, (snapshot) => {
-      setPlayers(snapshot.val() || {});
-    });
+    const unsubscribe = onValue(
+      playersRef,
+      (snapshot) => {
+        setPlayers(snapshot.val() || {});
+      }
+    );
 
     return () => unsubscribe();
   }, [authorized]);
@@ -44,9 +45,14 @@ export default function HostPage() {
 
     const statusRef = ref(db, "game/status");
 
-    const unsubscribe = onValue(statusRef, (snapshot) => {
-      setStatus(snapshot.val() || "waiting");
-    });
+    const unsubscribe = onValue(
+      statusRef,
+      (snapshot) => {
+        setStatus(
+          snapshot.val() || "waiting"
+        );
+      }
+    );
 
     return () => unsubscribe();
   }, [authorized]);
@@ -56,9 +62,14 @@ export default function HostPage() {
 
     const pairsRef = ref(db, "imagePairs");
 
-    const unsubscribe = onValue(pairsRef, (snapshot) => {
-      setImagePairs(snapshot.val() || {});
-    });
+    const unsubscribe = onValue(
+      pairsRef,
+      (snapshot) => {
+        setImagePairs(
+          snapshot.val() || {}
+        );
+      }
+    );
 
     return () => unsubscribe();
   }, [authorized]);
@@ -66,50 +77,128 @@ export default function HostPage() {
   function handleLogin() {
     if (passwordInput === HOST_PASSWORD) {
       setAuthorized(true);
-      sessionStorage.setItem("hostAuthorized", "true");
+
+      sessionStorage.setItem(
+        "hostAuthorized",
+        "true"
+      );
+
       setError("");
     } else {
-      setError("كلمة المرور غير صحيحة");
+      setError(
+        "كلمة المرور غير صحيحة"
+      );
     }
   }
-
-  // =========================================================
-  // بدء الجولة
-  // =========================================================
 
   function startGame() {
     if (!selectedPairId) {
-      alert("يرجى اختيار مجموعة صور أولاً");
+      alert(
+        "يرجى اختيار مجموعة صور أولاً"
+      );
       return;
     }
 
-    // نفس النظام الموجود عندك
-    // يبدأ العد التنازلي من 5
-    set(ref(db, "game/currentPairId"), selectedPairId);
-    set(ref(db, "game/countdownStartedAt"), Date.now());
-    set(ref(db, "game/status"), "countdown");
+    /*
+      مهم جدًا:
 
-    // وقت بداية اللعب الحقيقي بعد 5 ثواني
+      هنا لا نضع startedAt.
+
+      نضع فقط وقت بداية العد التنازلي.
+      وبعد 5 ثوانٍ نضع startedAt.
+
+      بهذه الطريقة وقت اللعب الحقيقي
+      لا يبدأ أثناء 5 -> 4 -> 3 -> 2 -> 1.
+    */
+
+    const countdownStartedAt =
+      Date.now();
+
+    set(
+      ref(
+        db,
+        "game/currentPairId"
+      ),
+      selectedPairId
+    );
+
+    set(
+      ref(
+        db,
+        "game/countdownStartedAt"
+      ),
+      countdownStartedAt
+    );
+
+    // إزالة وقت الجولة القديمة
+    set(
+      ref(
+        db,
+        "game/startedAt"
+      ),
+      null
+    );
+
+    // بداية العد التنازلي
+    set(
+      ref(
+        db,
+        "game/status"
+      ),
+      "countdown"
+    );
+
+    /*
+      بعد 5 ثوانٍ بالضبط تبدأ الجولة.
+    */
+
     setTimeout(() => {
-      set(ref(db, "game/startedAt"), Date.now());
-      set(ref(db, "game/status"), "playing");
-    }, 5000);
+      const realGameStart =
+        countdownStartedAt +
+        COUNTDOWN_SECONDS * 1000;
+
+      set(
+        ref(
+          db,
+          "game/startedAt"
+        ),
+        realGameStart
+      );
+
+      set(
+        ref(
+          db,
+          "game/status"
+        ),
+        "playing"
+      );
+    }, COUNTDOWN_SECONDS * 1000);
   }
-
-  // =========================================================
-  // إغلاق الجولة وإرجاع الجميع إلى قاعة الانتظار
-  // =========================================================
-
-  function closeRound() {
-    set(ref(db, "game/status"), "waiting");
-  }
-
-  // =========================================================
-  // إعادة تعيين
-  // =========================================================
 
   function resetGame() {
-    set(ref(db, "game/status"), "waiting");
+    set(
+      ref(
+        db,
+        "game/status"
+      ),
+      "waiting"
+    );
+
+    set(
+      ref(
+        db,
+        "game/startedAt"
+      ),
+      null
+    );
+
+    set(
+      ref(
+        db,
+        "game/countdownStartedAt"
+      ),
+      null
+    );
   }
 
   if (!authorized) {
@@ -123,12 +212,17 @@ export default function HostPage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          fontFamily: "Arial, sans-serif",
+          fontFamily:
+            "Arial, sans-serif",
           gap: 15,
           padding: 20,
         }}
       >
-        <h2 style={{ color: "#f8d46b" }}>
+        <h2
+          style={{
+            color: "#f8d46b",
+          }}
+        >
           تسجيل دخول المضيف
         </h2>
 
@@ -136,15 +230,22 @@ export default function HostPage() {
           type="password"
           placeholder="كلمة المرور"
           value={passwordInput}
-          onChange={(e) => setPasswordInput(e.target.value)}
+          onChange={(e) =>
+            setPasswordInput(
+              e.target.value
+            )
+          }
           onKeyDown={(e) =>
-            e.key === "Enter" && handleLogin()
+            e.key === "Enter" &&
+            handleLogin()
           }
           style={{
             padding: 14,
             borderRadius: 10,
-            border: "1px solid #d8b45b",
-            background: "rgba(255,255,255,0.05)",
+            border:
+              "1px solid #d8b45b",
+            background:
+              "rgba(255,255,255,0.05)",
             color: "white",
             textAlign: "center",
           }}
@@ -153,7 +254,8 @@ export default function HostPage() {
         <button
           onClick={handleLogin}
           style={{
-            padding: "12px 28px",
+            padding:
+              "12px 28px",
             background:
               "linear-gradient(135deg, #a86f12, #f7d574, #a86f12)",
             border: "none",
@@ -167,7 +269,11 @@ export default function HostPage() {
         </button>
 
         {error && (
-          <p style={{ color: "#e04b3f" }}>
+          <p
+            style={{
+              color: "#e04b3f",
+            }}
+          >
             {error}
           </p>
         )}
@@ -175,8 +281,11 @@ export default function HostPage() {
     );
   }
 
-  const playersList = Object.entries(players);
-  const pairsList = Object.entries(imagePairs);
+  const playersList =
+    Object.entries(players);
+
+  const pairsList =
+    Object.entries(imagePairs);
 
   return (
     <main
@@ -185,10 +294,15 @@ export default function HostPage() {
         background: "#030302",
         color: "white",
         padding: 40,
-        fontFamily: "Arial, sans-serif",
+        fontFamily:
+          "Arial, sans-serif",
       }}
     >
-      <h1 style={{ color: "#f8d46b" }}>
+      <h1
+        style={{
+          color: "#f8d46b",
+        }}
+      >
         لوحة تحكم المضيف
       </h1>
 
@@ -200,15 +314,18 @@ export default function HostPage() {
       </p>
 
       <p>
-        عدد اللاعبين: {playersList.length} / 10
+        عدد اللاعبين:{" "}
+        {playersList.length} / 10
       </p>
 
       <ul>
-        {playersList.map(([id, p]) => (
-          <li key={id}>
-            {p.name}
-          </li>
-        ))}
+        {playersList.map(
+          ([id, p]) => (
+            <li key={id}>
+              {p.name}
+            </li>
+          )
+        )}
       </ul>
 
       <h2
@@ -221,74 +338,96 @@ export default function HostPage() {
       </h2>
 
       {pairsList.length === 0 ? (
-        <p style={{ color: "#999" }}>
-          لا توجد أي مجموعة صور محفوظة. يرجى الانتقال إلى صفحة
-          /admin/differences لإضافة مجموعة صور جديدة.
+        <p
+          style={{
+            color: "#999",
+          }}
+        >
+          لا توجد أي مجموعة صور
+          محفوظة. يرجى الانتقال إلى
+          صفحة
+          /admin/differences
+          لإضافة مجموعة صور جديدة.
         </p>
       ) : (
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
+            flexDirection:
+              "column",
             gap: 10,
             maxWidth: 500,
           }}
         >
-          {pairsList.map(([id, pair]) => (
-            <label
-              key={id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: 12,
-                borderRadius: 10,
-                border:
-                  selectedPairId === id
-                    ? "2px solid #f8d46b"
-                    : "1px solid #333",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="radio"
-                name="pair"
-                checked={selectedPairId === id}
-                onChange={() =>
-                  setSelectedPairId(id)
-                }
-              />
+          {pairsList.map(
+            ([id, pair]) => (
+              <label
+                key={id}
+                style={{
+                  display:
+                    "flex",
+                  alignItems:
+                    "center",
+                  gap: 10,
+                  padding: 12,
+                  borderRadius: 10,
+                  border:
+                    selectedPairId ===
+                    id
+                      ? "2px solid #f8d46b"
+                      : "1px solid #333",
+                  cursor:
+                    "pointer",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="pair"
+                  checked={
+                    selectedPairId ===
+                    id
+                  }
+                  onChange={() =>
+                    setSelectedPairId(
+                      id
+                    )
+                  }
+                />
 
-              <span>
-                المستوى {pair.level} ({pair.name}) —{" "}
-                {pair.differences?.length || 0} اختلافات —{" "}
-                {pair.timeLimit} ثانية
-              </span>
-            </label>
-          ))}
+                <span>
+                  المستوى{" "}
+                  {pair.level} (
+                  {pair.name}) —{" "}
+                  {pair.differences
+                    ?.length || 0}{" "}
+                  اختلافات —{" "}
+                  {pair.timeLimit}{" "}
+                  ثانية
+                </span>
+              </label>
+            )
+          )}
         </div>
       )}
-
-      {/* =========================================================
-          أزرار التحكم
-      ========================================================= */}
 
       <div
         style={{
           display: "flex",
           gap: 15,
           marginTop: 25,
-          flexWrap: "wrap",
         }}
       >
         <button
           onClick={startGame}
           disabled={
-            status === "playing" ||
-            status === "countdown"
+            status ===
+              "playing" ||
+            status ===
+              "countdown"
           }
           style={{
-            padding: "15px 30px",
+            padding:
+              "15px 30px",
             fontSize: 18,
             background:
               "linear-gradient(135deg, #a86f12, #f7d574, #a86f12)",
@@ -302,37 +441,18 @@ export default function HostPage() {
           بدء اللعبة
         </button>
 
-        {/* زر إغلاق الجولة */}
         <button
-          onClick={closeRound}
-          disabled={status === "waiting"}
+          onClick={
+            resetGame
+          }
           style={{
-            padding: "15px 30px",
+            padding:
+              "15px 30px",
             fontSize: 18,
             background:
-              status === "waiting"
-                ? "#333"
-                : "linear-gradient(135deg, #8b1e1e, #d94a4a, #8b1e1e)",
-            border: "none",
-            borderRadius: 10,
-            color: "white",
-            fontWeight: 900,
-            cursor:
-              status === "waiting"
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          🔒 إغلاق الجولة
-        </button>
-
-        <button
-          onClick={resetGame}
-          style={{
-            padding: "15px 30px",
-            fontSize: 18,
-            background: "transparent",
-            border: "1px solid #d8b45b",
+              "transparent",
+            border:
+              "1px solid #d8b45b",
             borderRadius: 10,
             color: "#d8b45b",
             cursor: "pointer",
@@ -341,40 +461,6 @@ export default function HostPage() {
           إعادة تعيين
         </button>
       </div>
-
-      {/* رسالة توضيحية */}
-      {status === "waiting" && (
-        <p
-          style={{
-            marginTop: 20,
-            color: "#999",
-          }}
-        >
-          اللاعبين الآن في قاعة الانتظار.
-        </p>
-      )}
-
-      {status === "countdown" && (
-        <p
-          style={{
-            marginTop: 20,
-            color: "#f8d46b",
-          }}
-        >
-          العد التنازلي يعمل...
-        </p>
-      )}
-
-      {status === "playing" && (
-        <p
-          style={{
-            marginTop: 20,
-            color: "#00ff88",
-          }}
-        >
-          🎮 الجولة تعمل الآن.
-        </p>
-      )}
     </main>
   );
 }
