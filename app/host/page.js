@@ -6,6 +6,15 @@ import { ref, onValue, set } from "firebase/database";
 
 const HOST_PASSWORD = "055105";
 const COUNTDOWN_SECONDS = 5;
+const REVEAL_SECONDS = 5;
+
+const DURATION_OPTIONS = [
+  { label: "30 ثانية", value: 30 },
+  { label: "دقيقة واحدة", value: 60 },
+  { label: "دقيقتان", value: 120 },
+  { label: "3 دقائق", value: 180 },
+  { label: "4 دقائق", value: 240 },
+];
 
 export default function HostPage() {
   const [authorized, setAuthorized] = useState(false);
@@ -13,13 +22,14 @@ export default function HostPage() {
   const [error, setError] = useState("");
 
   const [players, setPlayers] = useState({});
-  const [status, setStatus] = useState("waiting");
+  const [gameData, setGameData] = useState({});
   const [imagePairs, setImagePairs] = useState({});
   const [selectedPairId, setSelectedPairId] = useState("");
+  const [selectedDuration, setSelectedDuration] = useState(null);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     const saved = sessionStorage.getItem("hostAuthorized");
-
     if (saved === "true") {
       setAuthorized(true);
     }
@@ -27,178 +37,153 @@ export default function HostPage() {
 
   useEffect(() => {
     if (!authorized) return;
-
     const playersRef = ref(db, "players");
+    const unsubscribe = onValue(playersRef, (snapshot) => {
+      setPlayers(snapshot.val() || {});
+    });
+    return () => unsubscribe();
+  }, [authorized]);
 
-    const unsubscribe = onValue(
-      playersRef,
-      (snapshot) => {
-        setPlayers(snapshot.val() || {});
-      }
-    );
-
+  // نقرأ عقدة game كاملة (وليس status فقط) حتى نحسب
+  // بأنفسنا في أي مرحلة نحن: عد تنازلي / لعب / عرض الحل / تصنيف
+  useEffect(() => {
+    if (!authorized) return;
+    const gameRef = ref(db, "game");
+    const unsubscribe = onValue(gameRef, (snapshot) => {
+      setGameData(snapshot.val() || {});
+    });
     return () => unsubscribe();
   }, [authorized]);
 
   useEffect(() => {
     if (!authorized) return;
-
-    const statusRef = ref(db, "game/status");
-
-    const unsubscribe = onValue(
-      statusRef,
-      (snapshot) => {
-        setStatus(
-          snapshot.val() || "waiting"
-        );
-      }
-    );
-
-    return () => unsubscribe();
-  }, [authorized]);
-
-  useEffect(() => {
-    if (!authorized) return;
-
     const pairsRef = ref(db, "imagePairs");
-
-    const unsubscribe = onValue(
-      pairsRef,
-      (snapshot) => {
-        setImagePairs(
-          snapshot.val() || {}
-        );
-      }
-    );
-
+    const unsubscribe = onValue(pairsRef, (snapshot) => {
+      setImagePairs(snapshot.val() || {});
+    });
     return () => unsubscribe();
+  }, [authorized]);
+
+  // ساعة داخلية لحساب مرحلة الجولة الحالية لحظيًا
+  useEffect(() => {
+    if (!authorized) return;
+    const interval = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(interval);
   }, [authorized]);
 
   function handleLogin() {
     if (passwordInput === HOST_PASSWORD) {
       setAuthorized(true);
-
-      sessionStorage.setItem(
-        "hostAuthorized",
-        "true"
-      );
-
+      sessionStorage.setItem("hostAuthorized", "true");
       setError("");
     } else {
-      setError(
-        "كلمة المرور غير صحيحة"
-      );
+      setError("كلمة المرور غير صحيحة");
     }
   }
 
+  // =========================================================
+  // حساب مرحلة الجولة الحالية بشكل مطابق لما تحسبه صفحة اللعب:
+  // idle -> countdown -> playing -> revealing -> leaderboard
+  // (تبقى في leaderboard حتى يبدأ المضيف جولة جديدة)
+  // =========================================================
+
+  const countdownStartedAt = gameData.countdownStartedAt || null;
+  const currentPair = gameData.currentPairId
+    ? imagePairs[gameData.currentPairId]
+    : null;
+  const roundDuration =
+    Number(gameData.roundDuration) ||
+    Number(currentPair?.timeLimit) ||
+    0;
+
+  let phase = "idle";
+  if (countdownStartedAt) {
+    const elapsed = (now - countdownStartedAt) / 1000;
+    if (elapsed < COUNTDOWN_SECONDS) {
+      phase = "countdown";
+    } else if (elapsed < COUNTDOWN_SECONDS + roundDuration) {
+      phase = "playing";
+    } else if (
+      elapsed <
+      COUNTDOWN_SECONDS + roundDuration + REVEAL_SECONDS
+    ) {
+      phase = "revealing";
+    } else {
+      phase = "leaderboard";
+    }
+  }
+
+  const phaseLabels = {
+    idle: "بانتظار بدء اللعبة",
+    countdown: "⏳ عد تنازلي...",
+    playing: "🎮 الجولة جارية الآن",
+    revealing: "👁 عرض الحل للاعبين",
+    leaderboard: "🏆 عرض التصنيف — بانتظارك لبدء الجولة التالية",
+  };
+
+  const canStart =
+    selectedPairId &&
+    selectedDuration &&
+    (phase === "idle" || phase === "leaderboard");
+
+  const startButtonLabel =
+    phase === "leaderboard" ? "ابدأ الجولة التالية" : "بدء اللعبة";
+
   function startGame() {
-    if (!selectedPairId) {
-      alert(
-        "يرجى اختيار مجموعة صور أولاً"
-      );
+    if (!selectedPairId || !selectedDuration) {
+      alert("يرجى اختيار الصورة ومدة الجولة أولاً");
       return;
     }
 
     /*
       مهم جدًا:
-
       هنا لا نضع startedAt.
-
-      نضع فقط وقت بداية العد التنازلي.
+      نضع فقط وقت بداية العد التنازلي، ومدة الجولة التي اخترتها.
       وبعد 5 ثوانٍ نضع startedAt.
-
-      بهذه الطريقة وقت اللعب الحقيقي
-      لا يبدأ أثناء 5 -> 4 -> 3 -> 2 -> 1.
+      بهذه الطريقة وقت اللعب الحقيقي لا يبدأ أثناء 5 -> 4 -> 3 -> 2 -> 1.
     */
 
-    const countdownStartedAt =
-      Date.now();
+    const newCountdownStartedAt = Date.now();
 
-    set(
-      ref(
-        db,
-        "game/currentPairId"
-      ),
-      selectedPairId
-    );
+    set(ref(db, "game/currentPairId"), selectedPairId);
+    set(ref(db, "game/roundDuration"), selectedDuration);
+    set(ref(db, "game/countdownStartedAt"), newCountdownStartedAt);
+    set(ref(db, "game/startedAt"), null); // إزالة وقت الجولة القديمة
+    set(ref(db, "game/status"), "countdown"); // بداية العد التنازلي
 
-    set(
-      ref(
-        db,
-        "game/countdownStartedAt"
-      ),
-      countdownStartedAt
-    );
-
-    // إزالة وقت الجولة القديمة
-    set(
-      ref(
-        db,
-        "game/startedAt"
-      ),
-      null
-    );
-
-    // بداية العد التنازلي
-    set(
-      ref(
-        db,
-        "game/status"
-      ),
-      "countdown"
-    );
-
-    /*
-      بعد 5 ثوانٍ بالضبط تبدأ الجولة.
-    */
-
+    // بعد 5 ثوانٍ بالضبط تبدأ الجولة فعليًا
     setTimeout(() => {
       const realGameStart =
-        countdownStartedAt +
-        COUNTDOWN_SECONDS * 1000;
+        newCountdownStartedAt + COUNTDOWN_SECONDS * 1000;
 
-      set(
-        ref(
-          db,
-          "game/startedAt"
-        ),
-        realGameStart
-      );
-
-      set(
-        ref(
-          db,
-          "game/status"
-        ),
-        "playing"
-      );
+      set(ref(db, "game/startedAt"), realGameStart);
+      set(ref(db, "game/status"), "playing");
     }, COUNTDOWN_SECONDS * 1000);
   }
 
   function resetGame() {
-    set(
-      ref(
-        db,
-        "game/status"
-      ),
-      "waiting"
-    );
+    if (
+      !confirm(
+        "سيتم إنهاء اللعبة الحالية وتصفير نقاط ومحاولات جميع اللاعبين. متابعة؟"
+      )
+    ) {
+      return;
+    }
 
-    set(
-      ref(
-        db,
-        "game/startedAt"
-      ),
-      null
-    );
+    set(ref(db, "game/status"), "waiting");
+    set(ref(db, "game/startedAt"), null);
+    set(ref(db, "game/countdownStartedAt"), null);
+    set(ref(db, "game/currentPairId"), null);
+    set(ref(db, "game/roundDuration"), null);
 
-    set(
-      ref(
-        db,
-        "game/countdownStartedAt"
-      ),
-      null
-    );
+    // تصفير نقاط ومحاولات جميع اللاعبين لبدء لعبة جديدة من الصفر
+    Object.keys(players).forEach((id) => {
+      set(ref(db, `players/${id}/score`), 0);
+      set(ref(db, `players/${id}/attemptsLeft`), 5);
+    });
+
+    setSelectedPairId("");
+    setSelectedDuration(null);
   }
 
   if (!authorized) {
@@ -212,40 +197,24 @@ export default function HostPage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          fontFamily:
-            "Arial, sans-serif",
+          fontFamily: "Arial, sans-serif",
           gap: 15,
           padding: 20,
         }}
       >
-        <h2
-          style={{
-            color: "#f8d46b",
-          }}
-        >
-          تسجيل دخول المضيف
-        </h2>
+        <h2 style={{ color: "#f8d46b" }}>تسجيل دخول المضيف</h2>
 
         <input
           type="password"
           placeholder="كلمة المرور"
           value={passwordInput}
-          onChange={(e) =>
-            setPasswordInput(
-              e.target.value
-            )
-          }
-          onKeyDown={(e) =>
-            e.key === "Enter" &&
-            handleLogin()
-          }
+          onChange={(e) => setPasswordInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
           style={{
             padding: 14,
             borderRadius: 10,
-            border:
-              "1px solid #d8b45b",
-            background:
-              "rgba(255,255,255,0.05)",
+            border: "1px solid #d8b45b",
+            background: "rgba(255,255,255,0.05)",
             color: "white",
             textAlign: "center",
           }}
@@ -254,8 +223,7 @@ export default function HostPage() {
         <button
           onClick={handleLogin}
           style={{
-            padding:
-              "12px 28px",
+            padding: "12px 28px",
             background:
               "linear-gradient(135deg, #a86f12, #f7d574, #a86f12)",
             border: "none",
@@ -268,24 +236,14 @@ export default function HostPage() {
           دخول
         </button>
 
-        {error && (
-          <p
-            style={{
-              color: "#e04b3f",
-            }}
-          >
-            {error}
-          </p>
-        )}
+        {error && <p style={{ color: "#e04b3f" }}>{error}</p>}
       </main>
     );
   }
 
-  const playersList =
-    Object.entries(players);
-
-  const pairsList =
-    Object.entries(imagePairs);
+  const playersList = Object.entries(players);
+  const pairsList = Object.entries(imagePairs);
+  const roundLocked = phase === "countdown" || phase === "playing" || phase === "revealing";
 
   return (
     <main
@@ -294,171 +252,128 @@ export default function HostPage() {
         background: "#030302",
         color: "white",
         padding: 40,
-        fontFamily:
-          "Arial, sans-serif",
+        fontFamily: "Arial, sans-serif",
       }}
     >
-      <h1
-        style={{
-          color: "#f8d46b",
-        }}
-      >
-        لوحة تحكم المضيف
-      </h1>
+      <h1 style={{ color: "#f8d46b" }}>لوحة تحكم المضيف</h1>
 
-      <p>
-        حالة اللعبة:{" "}
-        <strong>
-          {status}
-        </strong>
+      <p style={{ fontSize: 16 }}>
+        حالة الجولة: <strong style={{ color: "#f8d46b" }}>{phaseLabels[phase]}</strong>
       </p>
 
-      <p>
-        عدد اللاعبين:{" "}
-        {playersList.length} / 10
-      </p>
+      <p>عدد اللاعبين: {playersList.length} / 10</p>
 
       <ul>
-        {playersList.map(
-          ([id, p]) => (
-            <li key={id}>
-              {p.name}
-            </li>
-          )
-        )}
+        {playersList.map(([id, p]) => (
+          <li key={id}>
+            {p.name} — {p.score || 0} نقطة
+          </li>
+        ))}
       </ul>
 
-      <h2
-        style={{
-          color: "#f8d46b",
-          marginTop: 30,
-        }}
-      >
-        اختر مجموعة الصور
-      </h2>
+      <h2 style={{ color: "#f8d46b", marginTop: 30 }}>1. اختر الصورة</h2>
 
       {pairsList.length === 0 ? (
-        <p
-          style={{
-            color: "#999",
-          }}
-        >
-          لا توجد أي مجموعة صور
-          محفوظة. يرجى الانتقال إلى
-          صفحة
-          /admin/differences
-          لإضافة مجموعة صور جديدة.
+        <p style={{ color: "#999" }}>
+          لا توجد أي مجموعة صور محفوظة. يرجى الانتقال إلى صفحة
+          /admin/differences لإضافة مجموعة صور جديدة.
         </p>
       ) : (
-        <div
-          style={{
-            display: "flex",
-            flexDirection:
-              "column",
-            gap: 10,
-            maxWidth: 500,
-          }}
-        >
-          {pairsList.map(
-            ([id, pair]) => (
-              <label
-                key={id}
-                style={{
-                  display:
-                    "flex",
-                  alignItems:
-                    "center",
-                  gap: 10,
-                  padding: 12,
-                  borderRadius: 10,
-                  border:
-                    selectedPairId ===
-                    id
-                      ? "2px solid #f8d46b"
-                      : "1px solid #333",
-                  cursor:
-                    "pointer",
-                }}
-              >
-                <input
-                  type="radio"
-                  name="pair"
-                  checked={
-                    selectedPairId ===
-                    id
-                  }
-                  onChange={() =>
-                    setSelectedPairId(
-                      id
-                    )
-                  }
-                />
-
-                <span>
-                  المستوى{" "}
-                  {pair.level} (
-                  {pair.name}) —{" "}
-                  {pair.differences
-                    ?.length || 0}{" "}
-                  اختلافات —{" "}
-                  {pair.timeLimit}{" "}
-                  ثانية
-                </span>
-              </label>
-            )
-          )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 500 }}>
+          {pairsList.map(([id, pair]) => (
+            <label
+              key={id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: 12,
+                borderRadius: 10,
+                border:
+                  selectedPairId === id ? "2px solid #f8d46b" : "1px solid #333",
+                cursor: roundLocked ? "not-allowed" : "pointer",
+                opacity: roundLocked ? 0.5 : 1,
+              }}
+            >
+              <input
+                type="radio"
+                name="pair"
+                disabled={roundLocked}
+                checked={selectedPairId === id}
+                onChange={() => setSelectedPairId(id)}
+              />
+              <span>
+                المستوى {pair.level} ({pair.name}) —{" "}
+                {pair.differences?.length || 0} اختلافات
+              </span>
+            </label>
+          ))}
         </div>
       )}
 
-      <div
-        style={{
-          display: "flex",
-          gap: 15,
-          marginTop: 25,
-        }}
-      >
+      <h2 style={{ color: "#f8d46b", marginTop: 30 }}>2. اختر مدة الجولة</h2>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", maxWidth: 560 }}>
+        {DURATION_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            disabled={roundLocked}
+            onClick={() => setSelectedDuration(opt.value)}
+            style={{
+              padding: "12px 18px",
+              borderRadius: 10,
+              cursor: roundLocked ? "not-allowed" : "pointer",
+              fontWeight: 700,
+              opacity: roundLocked ? 0.5 : 1,
+              border:
+                selectedDuration === opt.value
+                  ? "2px solid #f8d46b"
+                  : "1px solid #444",
+              background:
+                selectedDuration === opt.value
+                  ? "rgba(248,212,107,0.15)"
+                  : "transparent",
+              color: selectedDuration === opt.value ? "#f8d46b" : "#ddd",
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 15, marginTop: 30 }}>
         <button
           onClick={startGame}
-          disabled={
-            status ===
-              "playing" ||
-            status ===
-              "countdown"
-          }
+          disabled={!canStart}
           style={{
-            padding:
-              "15px 30px",
+            padding: "15px 30px",
             fontSize: 18,
-            background:
-              "linear-gradient(135deg, #a86f12, #f7d574, #a86f12)",
+            background: canStart
+              ? "linear-gradient(135deg, #a86f12, #f7d574, #a86f12)"
+              : "#333",
             border: "none",
             borderRadius: 10,
-            color: "#120b02",
+            color: canStart ? "#120b02" : "#777",
             fontWeight: 900,
-            cursor: "pointer",
+            cursor: canStart ? "pointer" : "not-allowed",
           }}
         >
-          بدء اللعبة
+          {startButtonLabel}
         </button>
 
         <button
-          onClick={
-            resetGame
-          }
+          onClick={resetGame}
           style={{
-            padding:
-              "15px 30px",
+            padding: "15px 30px",
             fontSize: 18,
-            background:
-              "transparent",
-            border:
-              "1px solid #d8b45b",
+            background: "transparent",
+            border: "1px solid #d8b45b",
             borderRadius: 10,
             color: "#d8b45b",
             cursor: "pointer",
           }}
         >
-          إعادة تعيين
+          إعادة تعيين اللعبة بالكامل
         </button>
       </div>
     </main>
