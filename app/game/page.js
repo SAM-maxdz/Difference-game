@@ -367,7 +367,6 @@ export default function GamePage() {
 
   // =========================================================
   // الضغط على الصورة
-  // مهم: يستخدم PointerEvent ليعمل بشكل أفضل على الهاتف
   // =========================================================
 
   function handleImageClick(e) {
@@ -742,15 +741,15 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* المقاعد العلوية */}
+          {/* ================================================= */}
+          {/* الصف العلوي - مكانه ثابت دائمًا */}
+          {/* ================================================= */}
 
-          {!roundEnded && (
-            <SeatRow
-              seats={
-                topSeats
-              }
-            />
-          )}
+          <SeatRow
+            seats={
+              topSeats
+            }
+          />
 
           {/* ================================================= */}
           {/* نهاية الجولة */}
@@ -1025,15 +1024,15 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* المقاعد السفلية */}
+          {/* ================================================= */}
+          {/* الصف السفلي - مكانه ثابت دائمًا */}
+          {/* ================================================= */}
 
-          {!roundEnded && (
-            <SeatRow
-              seats={
-                bottomSeats
-              }
-            />
-          )}
+          <SeatRow
+            seats={
+              bottomSeats
+            }
+          />
 
           {/* رسالة حالة اللاعب */}
 
@@ -1177,6 +1176,7 @@ function ImageBox({
         />
 
         {/* العلامات لا تمنع الضغط */}
+
         {Object.keys(
           found
         ).map((i) => {
@@ -1218,92 +1218,87 @@ function ImageBox({
 function SeatRow({
   seats,
 }) {
-  if (
-    seats.length ===
-    0
-  ) {
-    return null;
-  }
-
   return (
     <div
       style={
         styles.seatRow
       }
     >
-      {seats.map(
-        (p) => (
-          <div
-            key={
-              p.id
-            }
-            style={
-              styles.seat
-            }
-          >
+      {seats.length > 0 ? (
+        seats.map(
+          (p) => (
             <div
+              key={
+                p.id
+              }
               style={
-                styles.seatAvatarWrap
+                styles.seat
               }
             >
-              {p.avatar && (
-                <img
-                  src={
-                    p.avatar
-                  }
-                  alt={
-                    p.name
-                  }
-                  style={
-                    styles.seatAvatar
-                  }
+              <div
+                style={
+                  styles.seatAvatarWrap
+                }
+              >
+                {p.avatar && (
+                  <img
+                    src={
+                      p.avatar
+                    }
+                    alt={
+                      p.name
+                    }
+                    style={
+                      styles.seatAvatar
+                    }
+                  />
+                )}
+
+                <span
+                  style={{
+                    ...styles.statusDot,
+                    background:
+                      p.attemptsLeft >
+                      0
+                        ? "#00ff88"
+                        : "#e04b3f",
+                  }}
                 />
-              )}
+              </div>
 
               <span
-                style={{
-                  ...styles.statusDot,
-                  background:
-                    p.attemptsLeft >
-                    0
-                      ? "#00ff88"
-                      : "#e04b3f",
-                }}
-              />
+                style={
+                  styles.seatName
+                }
+              >
+                {
+                  p.name
+                }
+              </span>
+
+              <span
+                style={
+                  styles.seatScore
+                }
+              >
+                {p.score ||
+                  0}{" "}
+                نقطة
+              </span>
+
+              <span
+                style={
+                  styles.seatAttempts
+                }
+              >
+                محاولات:{" "}
+                {p.attemptsLeft ??
+                  ATTEMPTS_START}
+              </span>
             </div>
-
-            <span
-              style={
-                styles.seatName
-              }
-            >
-              {
-                p.name
-              }
-            </span>
-
-            <span
-              style={
-                styles.seatScore
-              }
-            >
-              {p.score ||
-                0}{" "}
-              نقطة
-            </span>
-
-            <span
-              style={
-                styles.seatAttempts
-              }
-            >
-              محاولات:{" "}
-              {p.attemptsLeft ??
-                ATTEMPTS_START}
-            </span>
-          </div>
+          )
         )
-      )}
+      ) : null}
     </div>
   );
 }
@@ -1460,16 +1455,29 @@ const styles = {
       2,
   },
 
+  /*
+   * مهم جدًا:
+   * الصفوف لها ارتفاع محجوز دائمًا.
+   * لذلك وصول بيانات اللاعبين لن يحرك الصور.
+   */
+
   seatRow: {
     display:
       "flex",
     justifyContent:
       "center",
+    alignItems:
+      "flex-start",
     gap: 10,
     flexWrap:
       "wrap",
     margin:
       "10px 0",
+    minHeight: 88,
+    width:
+      "100%",
+    boxSizing:
+      "border-box",
   },
 
   seat: {
@@ -1479,6 +1487,8 @@ const styles = {
       "column",
     alignItems:
       "center",
+    justifyContent:
+      "center",
     background:
       "rgba(255,255,255,0.07)",
     borderRadius:
@@ -1486,6 +1496,9 @@ const styles = {
     padding:
       "6px 10px",
     minWidth: 76,
+    minHeight: 76,
+    boxSizing:
+      "border-box",
   },
 
   seatAvatarWrap: {
