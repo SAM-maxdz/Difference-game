@@ -81,6 +81,8 @@ export default function GamePage() {
   useEffect(() => {
     const gameRef = ref(db, "game");
 
+    let interval = null;
+
     const unsubscribe = onValue(
       gameRef,
       (snapshot) => {
@@ -91,6 +93,12 @@ export default function GamePage() {
           !data.countdownStartedAt
         ) {
           setCountdown(null);
+
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
+
           return;
         }
 
@@ -110,23 +118,34 @@ export default function GamePage() {
             setCountdown(value);
           } else {
             setCountdown(null);
+
+            if (interval) {
+              clearInterval(interval);
+              interval = null;
+            }
           }
         };
 
+        if (interval) {
+          clearInterval(interval);
+        }
+
         updateCountdown();
 
-        const interval = setInterval(
+        interval = setInterval(
           updateCountdown,
           100
         );
-
-        return () => {
-          clearInterval(interval);
-        };
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+
+      unsubscribe();
+    };
   }, []);
 
   // =========================================================
@@ -213,45 +232,103 @@ export default function GamePage() {
 
   // =========================================================
   // وقت اللعبة
+  //
+  // مهم جداً:
+  // يبدأ بعد انتهاء عداد 5 ثواني.
+  //
+  // إذا كان countdownStartedAt موجوداً:
+  // بداية اللعب الحقيقية = countdownStartedAt + 5000
+  //
   // =========================================================
 
   useEffect(() => {
-    if (
-      !pair ||
-      !startedAt
-    ) {
+    if (!pair) {
       return;
     }
 
-    const updateTimer = () => {
-      const elapsed =
-        (Date.now() -
-          Number(startedAt)) /
-        1000;
+    const gameRef = ref(db, "game");
 
-      const rem = Math.max(
-        0,
-        Number(pair.timeLimit) -
-          elapsed
-      );
+    let interval = null;
 
-      setRemaining(rem);
+    const unsubscribe = onValue(
+      gameRef,
+      (snapshot) => {
+        const data = snapshot.val() || {};
 
-      if (rem <= 0) {
-        setRoundEnded(true);
+        let actualStart = null;
+
+        // إذا المضيف يرسل playStartedAt
+        // نستخدمه مباشرة لأنه يمثل بداية اللعب
+        if (data.playStartedAt) {
+          actualStart =
+            Number(data.playStartedAt);
+        }
+
+        // إذا لا يوجد playStartedAt
+        // نستخدم نهاية العد التنازلي
+        else if (
+          data.countdownStartedAt
+        ) {
+          actualStart =
+            Number(
+              data.countdownStartedAt
+            ) + 5000;
+        }
+
+        // احتياط إذا لم يوجد عد تنازلي
+        else if (data.startedAt) {
+          actualStart =
+            Number(data.startedAt);
+        }
+
+        if (!actualStart) {
+          return;
+        }
+
+        const updateTimer = () => {
+          const elapsed =
+            (Date.now() -
+              actualStart) /
+            1000;
+
+          const limit =
+            Number(pair.timeLimit) || 0;
+
+          const rem = Math.max(
+            0,
+            limit - elapsed
+          );
+
+          setRemaining(rem);
+
+          if (rem <= 0) {
+            setRoundEnded(true);
+          } else {
+            setRoundEnded(false);
+          }
+        };
+
+        if (interval) {
+          clearInterval(interval);
+        }
+
+        updateTimer();
+
+        interval = setInterval(
+          updateTimer,
+          100
+        );
       }
-    };
-
-    updateTimer();
-
-    const interval = setInterval(
-      updateTimer,
-      100
     );
 
-    return () =>
-      clearInterval(interval);
-  }, [pair, startedAt]);
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+
+      unsubscribe();
+    };
+  }, [pair]);
 
   // =========================================================
   // بعد نهاية الجولة
@@ -416,10 +493,12 @@ export default function GamePage() {
           }
 
           const dx =
-            d.x - xPct;
+            Number(d.x) -
+            xPct;
 
           const dy =
-            d.y - yPct;
+            Number(d.y) -
+            yPct;
 
           const dist =
             Math.sqrt(
@@ -603,6 +682,7 @@ export default function GamePage() {
       {/* زر الموسيقى */}
 
       <button
+        type="button"
         style={styles.muteBtn}
         onClick={() =>
           setMuted(
@@ -741,15 +821,15 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* ================================================= */}
-          {/* الصف العلوي - مكانه ثابت دائمًا */}
-          {/* ================================================= */}
+          {/* المقاعد العلوية */}
 
-          <SeatRow
-            seats={
-              topSeats
-            }
-          />
+          {!roundEnded && (
+            <SeatRow
+              seats={
+                topSeats
+              }
+            />
+          )}
 
           {/* ================================================= */}
           {/* نهاية الجولة */}
@@ -1024,15 +1104,15 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* ================================================= */}
-          {/* الصف السفلي - مكانه ثابت دائمًا */}
-          {/* ================================================= */}
+          {/* المقاعد السفلية */}
 
-          <SeatRow
-            seats={
-              bottomSeats
-            }
-          />
+          {!roundEnded && (
+            <SeatRow
+              seats={
+                bottomSeats
+              }
+            />
+          )}
 
           {/* رسالة حالة اللاعب */}
 
@@ -1079,6 +1159,7 @@ export default function GamePage() {
           />
 
           <button
+            type="button"
             style={
               styles.zoomClose
             }
@@ -1108,17 +1189,6 @@ function ImageBox({
   onZoom,
   disabled,
 }) {
-  const handlePointerDown = (e) => {
-    if (
-      disabled ||
-      locked
-    ) {
-      return;
-    }
-
-    onClick(e);
-  };
-
   return (
     <div
       style={
@@ -1132,9 +1202,6 @@ function ImageBox({
         style={
           styles.zoomBtn
         }
-        onPointerDown={(e) => {
-          e.stopPropagation();
-        }}
         onClick={(e) => {
           e.stopPropagation();
           onZoom();
@@ -1155,13 +1222,12 @@ function ImageBox({
             locked
               ? "not-allowed"
               : "crosshair",
-          touchAction:
-            "none",
-          pointerEvents:
-            "auto",
         }}
-        onPointerDown={
-          handlePointerDown
+        onClick={
+          disabled ||
+          locked
+            ? undefined
+            : onClick
         }
       >
         <img
@@ -1218,87 +1284,92 @@ function ImageBox({
 function SeatRow({
   seats,
 }) {
+  if (
+    seats.length ===
+    0
+  ) {
+    return null;
+  }
+
   return (
     <div
       style={
         styles.seatRow
       }
     >
-      {seats.length > 0 ? (
-        seats.map(
-          (p) => (
+      {seats.map(
+        (p) => (
+          <div
+            key={
+              p.id
+            }
+            style={
+              styles.seat
+            }
+          >
             <div
-              key={
-                p.id
-              }
               style={
-                styles.seat
+                styles.seatAvatarWrap
               }
             >
-              <div
-                style={
-                  styles.seatAvatarWrap
-                }
-              >
-                {p.avatar && (
-                  <img
-                    src={
-                      p.avatar
-                    }
-                    alt={
-                      p.name
-                    }
-                    style={
-                      styles.seatAvatar
-                    }
-                  />
-                )}
-
-                <span
-                  style={{
-                    ...styles.statusDot,
-                    background:
-                      p.attemptsLeft >
-                      0
-                        ? "#00ff88"
-                        : "#e04b3f",
-                  }}
+              {p.avatar && (
+                <img
+                  src={
+                    p.avatar
+                  }
+                  alt={
+                    p.name
+                  }
+                  style={
+                    styles.seatAvatar
+                  }
                 />
-              </div>
+              )}
 
               <span
-                style={
-                  styles.seatName
-                }
-              >
-                {
-                  p.name
-                }
-              </span>
-
-              <span
-                style={
-                  styles.seatScore
-                }
-              >
-                {p.score ||
-                  0}{" "}
-                نقطة
-              </span>
-
-              <span
-                style={
-                  styles.seatAttempts
-                }
-              >
-                محاولات:{" "}
-                {p.attemptsLeft ??
-                  ATTEMPTS_START}
-              </span>
+                style={{
+                  ...styles.statusDot,
+                  background:
+                    p.attemptsLeft >
+                    0
+                      ? "#00ff88"
+                      : "#e04b3f",
+                }}
+              />
             </div>
-          )
+
+            <span
+              style={
+                styles.seatName
+              }
+            >
+              {
+                p.name
+              }
+            </span>
+
+            <span
+              style={
+                styles.seatScore
+              }
+            >
+              {p.score ||
+                0}{" "}
+              نقطة
+            </span>
+
+            <span
+              style={
+                styles.seatAttempts
+              }
+            >
+              محاولات:{" "}
+              {p.attemptsLeft ??
+                ATTEMPTS_START}
+            </span>
+          </div>
         )
-      ) : null}
+      )}
     </div>
   );
 }
@@ -1455,29 +1526,16 @@ const styles = {
       2,
   },
 
-  /*
-   * مهم جدًا:
-   * الصفوف لها ارتفاع محجوز دائمًا.
-   * لذلك وصول بيانات اللاعبين لن يحرك الصور.
-   */
-
   seatRow: {
     display:
       "flex",
     justifyContent:
       "center",
-    alignItems:
-      "flex-start",
     gap: 10,
     flexWrap:
       "wrap",
     margin:
       "10px 0",
-    minHeight: 88,
-    width:
-      "100%",
-    boxSizing:
-      "border-box",
   },
 
   seat: {
@@ -1487,8 +1545,6 @@ const styles = {
       "column",
     alignItems:
       "center",
-    justifyContent:
-      "center",
     background:
       "rgba(255,255,255,0.07)",
     borderRadius:
@@ -1496,9 +1552,6 @@ const styles = {
     padding:
       "6px 10px",
     minWidth: 76,
-    minHeight: 76,
-    boxSizing:
-      "border-box",
   },
 
   seatAvatarWrap: {
