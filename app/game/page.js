@@ -7,80 +7,38 @@ import { ref, onValue, set } from "firebase/database";
 const ATTEMPTS_START = 5;
 const POINTS_PER_DIFF = 50;
 const REVEAL_BEFORE_LEADERBOARD = 10;
-const COUNTDOWN_SECONDS = 5;
 
 export default function GamePage() {
   const [pairId, setPairId] = useState(null);
   const [pair, setPair] = useState(null);
+  const [startedAt, setStartedAt] = useState(null);
+  const [remaining, setRemaining] = useState(0);
 
-  const [startedAt, setStartedAt] =
-    useState(null);
+  const [countdown, setCountdown] = useState(null);
 
-  const [
-    countdownStartedAt,
-    setCountdownStartedAt,
-  ] = useState(null);
+  const [found, setFound] = useState({});
+  const [attemptsLeft, setAttemptsLeft] =
+    useState(ATTEMPTS_START);
+  const [score, setScore] = useState(0);
 
-  const [gameStatus, setGameStatus] =
-    useState("waiting");
+  const [flashRed, setFlashRed] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [roundEnded, setRoundEnded] = useState(false);
 
-  const [remaining, setRemaining] =
-    useState(0);
-
-  const [countdown, setCountdown] =
-    useState(null);
-
-  const [found, setFound] =
-    useState({});
-
-  const [
-    attemptsLeft,
-    setAttemptsLeft,
-  ] = useState(ATTEMPTS_START);
-
-  const [score, setScore] =
-    useState(0);
-
-  const [flashRed, setFlashRed] =
+  const [players, setPlayers] = useState({});
+  const [showLeaderboard, setShowLeaderboard] =
     useState(false);
 
-  const [locked, setLocked] =
-    useState(false);
+  const [muted, setMuted] = useState(false);
+  const [zoomSrc, setZoomSrc] = useState(null);
+  const [joinToast, setJoinToast] = useState(null);
 
-  const [roundEnded, setRoundEnded] =
-    useState(false);
+  const playerIdRef = useRef(null);
+  const knownPlayerIds = useRef(new Set());
 
-  const [players, setPlayers] =
-    useState({});
-
-  const [
-    showLeaderboard,
-    setShowLeaderboard,
-  ] = useState(false);
-
-  const [muted, setMuted] =
-    useState(false);
-
-  const [zoomSrc, setZoomSrc] =
-    useState(null);
-
-  const [joinToast, setJoinToast] =
-    useState(null);
-
-  const playerIdRef =
-    useRef(null);
-
-  const knownPlayerIds =
-    useRef(new Set());
-
-  const musicRef =
-    useRef(null);
-
-  const correctSoundRef =
-    useRef(null);
-
-  const wrongSoundRef =
-    useRef(null);
+  const musicRef = useRef(null);
+  const correctSoundRef = useRef(null);
+  const wrongSoundRef = useRef(null);
 
   // =========================================================
   // رقم اللاعب
@@ -88,9 +46,7 @@ export default function GamePage() {
 
   useEffect(() => {
     playerIdRef.current =
-      sessionStorage.getItem(
-        "playerId"
-      );
+      sessionStorage.getItem("playerId");
   }, []);
 
   // =========================================================
@@ -98,94 +54,80 @@ export default function GamePage() {
   // =========================================================
 
   useEffect(() => {
-    const gameRef =
-      ref(db, "game");
+    const gameRef = ref(db, "game");
 
-    const unsubscribe =
-      onValue(
-        gameRef,
-        (snapshot) => {
-          const data =
-            snapshot.val() || {};
+    const unsubscribe = onValue(
+      gameRef,
+      (snapshot) => {
+        const data = snapshot.val() || {};
 
-          setPairId(
-            data.currentPairId ||
-              null
-          );
+        setPairId(
+          data.currentPairId || null
+        );
 
-          setStartedAt(
-            data.startedAt ||
-              null
-          );
+        setStartedAt(
+          data.startedAt || null
+        );
+      }
+    );
 
-          setCountdownStartedAt(
-            data.countdownStartedAt ||
-              null
-          );
-
-          setGameStatus(
-            data.status ||
-              "waiting"
-          );
-        }
-      );
-
-    return () =>
-      unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   // =========================================================
-  // العد التنازلي 5 -> 4 -> 3 -> 2 -> 1
+  // العد التنازلي 5 4 3 2 1
   // =========================================================
 
   useEffect(() => {
-    if (
-      gameStatus !==
-        "countdown" ||
-      !countdownStartedAt
-    ) {
-      setCountdown(null);
-      return;
-    }
+    const gameRef = ref(db, "game");
 
-    const updateCountdown =
-      () => {
-        const elapsed =
-          (Date.now() -
-            countdownStartedAt) /
-          1000;
+    const unsubscribe = onValue(
+      gameRef,
+      (snapshot) => {
+        const data = snapshot.val() || {};
 
-        const value =
-          COUNTDOWN_SECONDS -
-          Math.floor(elapsed);
-
-        if (value > 0) {
-          setCountdown(
-            value
-          );
-        } else {
-          setCountdown(
-            null
-          );
+        if (
+          data.status !== "countdown" ||
+          !data.countdownStartedAt
+        ) {
+          setCountdown(null);
+          return;
         }
-      };
 
-    updateCountdown();
+        const countdownStartedAt =
+          Number(data.countdownStartedAt);
 
-    const interval =
-      setInterval(
-        updateCountdown,
-        100
-      );
+        const updateCountdown = () => {
+          const elapsed =
+            (Date.now() -
+              countdownStartedAt) /
+            1000;
 
-    return () =>
-      clearInterval(
-        interval
-      );
-  }, [
-    gameStatus,
-    countdownStartedAt,
-  ]);
+          const value =
+            5 - Math.floor(elapsed);
+
+          if (value >= 1) {
+            setCountdown(value);
+          } else {
+            setCountdown(null);
+          }
+        };
+
+        updateCountdown();
+
+        const interval = setInterval(
+          updateCountdown,
+          100
+        );
+
+        return () => {
+          clearInterval(interval);
+        };
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   // =========================================================
   // بيانات الصور
@@ -197,24 +139,21 @@ export default function GamePage() {
       return;
     }
 
-    const pairRef =
-      ref(
-        db,
-        `imagePairs/${pairId}`
-      );
+    const pairRef = ref(
+      db,
+      `imagePairs/${pairId}`
+    );
 
-    const unsubscribe =
-      onValue(
-        pairRef,
-        (snapshot) => {
-          setPair(
-            snapshot.val()
-          );
-        }
-      );
+    const unsubscribe = onValue(
+      pairRef,
+      (snapshot) => {
+        setPair(
+          snapshot.val() || null
+        );
+      }
+    );
 
-    return () =>
-      unsubscribe();
+    return () => unsubscribe();
   }, [pairId]);
 
   // =========================================================
@@ -245,18 +184,14 @@ export default function GamePage() {
       );
 
       setFound({});
-
       setAttemptsLeft(
         ATTEMPTS_START
       );
-
       setScore(0);
-
       setLocked(false);
-
       setRoundEnded(false);
-
       setShowLeaderboard(false);
+      setRemaining(0);
 
       set(
         ref(
@@ -274,104 +209,49 @@ export default function GamePage() {
         ATTEMPTS_START
       );
     }
-  }, [
-    pairId,
-    startedAt,
-  ]);
+  }, [pairId, startedAt]);
 
   // =========================================================
-  // عداد وقت اللعبة
+  // وقت اللعبة
   // =========================================================
 
   useEffect(() => {
-    if (!pair) {
-      return;
-    }
-
-    /*
-      وقت البداية الحقيقي:
-
-      إذا بدأ العد التنازلي،
-      فبداية اللعبة الحقيقية =
-      countdownStartedAt + 5 ثواني.
-
-      وهذا يمنع ظهور 0 أثناء
-      العد التنازلي.
-    */
-
-    let realStartTime =
-      startedAt;
-
     if (
-      !realStartTime &&
-      countdownStartedAt
+      !pair ||
+      !startedAt
     ) {
-      realStartTime =
-        countdownStartedAt +
-        COUNTDOWN_SECONDS *
-          1000;
-    }
-
-    if (!realStartTime) {
-      setRemaining(
-        0
-      );
       return;
     }
 
-    const updateTimer =
-      () => {
-        const elapsed =
-          (Date.now() -
-            realStartTime) /
-          1000;
+    const updateTimer = () => {
+      const elapsed =
+        (Date.now() -
+          Number(startedAt)) /
+        1000;
 
-        /*
-          أثناء العد التنازلي:
-          لا نسمح للعداد بالنزول.
+      const rem = Math.max(
+        0,
+        Number(pair.timeLimit) -
+          elapsed
+      );
 
-          إذا كانت مدة اللعبة 60:
-          يبقى 60 أثناء العد.
-        */
+      setRemaining(rem);
 
-        const rem =
-          Math.max(
-            0,
-            pair.timeLimit -
-              Math.max(
-                0,
-                elapsed
-              )
-          );
-
-        setRemaining(
-          rem
-        );
-
-        if (rem <= 0) {
-          setRoundEnded(
-            true
-          );
-        }
-      };
+      if (rem <= 0) {
+        setRoundEnded(true);
+      }
+    };
 
     updateTimer();
 
-    const interval =
-      setInterval(
-        updateTimer,
-        250
-      );
+    const interval = setInterval(
+      updateTimer,
+      100
+    );
 
     return () =>
-      clearInterval(
-        interval
-      );
-  }, [
-    pair,
-    startedAt,
-    countdownStartedAt,
-  ]);
+      clearInterval(interval);
+  }, [pair, startedAt]);
 
   // =========================================================
   // بعد نهاية الجولة
@@ -382,18 +262,17 @@ export default function GamePage() {
       return;
     }
 
-    const t =
-      setTimeout(
-        () =>
-          setShowLeaderboard(
-            true
-          ),
-        REVEAL_BEFORE_LEADERBOARD *
-          1000
-      );
+    const t = setTimeout(
+      () => {
+        setShowLeaderboard(true);
+      },
+      REVEAL_BEFORE_LEADERBOARD *
+        1000
+    );
 
-    return () =>
+    return () => {
       clearTimeout(t);
+    };
   }, [roundEnded]);
 
   // =========================================================
@@ -404,48 +283,42 @@ export default function GamePage() {
     const playersRef =
       ref(db, "players");
 
-    const unsubscribe =
-      onValue(
-        playersRef,
-        (snapshot) => {
-          const data =
-            snapshot.val() || {};
+    const unsubscribe = onValue(
+      playersRef,
+      (snapshot) => {
+        const data =
+          snapshot.val() || {};
 
-          Object.entries(
-            data
-          ).forEach(
-            ([id, p]) => {
-              if (
-                !knownPlayerIds.current.has(
-                  id
-                ) &&
-                knownPlayerIds.current
-                  .size > 0
-              ) {
-                setJoinToast(
-                  `🎉 ${p.name} انضم للعبة`
-                );
-
-                setTimeout(
-                  () =>
-                    setJoinToast(
-                      null
-                    ),
-                  3000
-                );
-              }
-
-              knownPlayerIds.current.add(
+        Object.entries(data).forEach(
+          ([id, p]) => {
+            if (
+              !knownPlayerIds.current.has(
                 id
+              ) &&
+              knownPlayerIds.current
+                .size > 0
+            ) {
+              setJoinToast(
+                `🎉 ${p.name} انضم للعبة`
+              );
+
+              setTimeout(
+                () => {
+                  setJoinToast(null);
+                },
+                3000
               );
             }
-          );
 
-          setPlayers(
-            data
-          );
-        }
-      );
+            knownPlayerIds.current.add(
+              id
+            );
+          }
+        );
+
+        setPlayers(data);
+      }
+    );
 
     return () =>
       unsubscribe();
@@ -470,18 +343,13 @@ export default function GamePage() {
         .play()
         .catch(() => {});
     }
-  }, [
-    muted,
-    pairId,
-  ]);
+  }, [muted, pairId]);
 
   // =========================================================
   // الأصوات
   // =========================================================
 
-  const playSound = (
-    audioRef
-  ) => {
+  const playSound = (audioRef) => {
     if (
       muted ||
       !audioRef.current
@@ -499,6 +367,7 @@ export default function GamePage() {
 
   // =========================================================
   // الضغط على الصورة
+  // مهم: يستخدم PointerEvent ليعمل بشكل أفضل على الهاتف
   // =========================================================
 
   function handleImageClick(e) {
@@ -506,15 +375,21 @@ export default function GamePage() {
       locked ||
       roundEnded ||
       countdown !== null ||
-      gameStatus !==
-        "playing" ||
-      !pair
+      !pair ||
+      remaining <= 0
     ) {
       return;
     }
 
     const rect =
       e.currentTarget.getBoundingClientRect();
+
+    if (
+      !rect.width ||
+      !rect.height
+    ) {
+      return;
+    }
 
     const xPct =
       ((e.clientX -
@@ -530,30 +405,42 @@ export default function GamePage() {
 
     let hitIndex = -1;
 
-    pair.differences.forEach(
-      (d, i) => {
-        if (found[i]) {
-          return;
+    if (
+      Array.isArray(
+        pair.differences
+      )
+    ) {
+      pair.differences.forEach(
+        (d, i) => {
+          if (found[i]) {
+            return;
+          }
+
+          const dx =
+            d.x - xPct;
+
+          const dy =
+            d.y - yPct;
+
+          const dist =
+            Math.sqrt(
+              dx * dx +
+                dy * dy
+            );
+
+          if (
+            dist <=
+            Number(d.radius)
+          ) {
+            hitIndex = i;
+          }
         }
+      );
+    }
 
-        const dist =
-          Math.sqrt(
-            (d.x - xPct) ** 2 +
-              (d.y - yPct) ** 2
-          );
-
-        if (
-          dist <=
-          d.radius
-        ) {
-          hitIndex = i;
-        }
-      }
-    );
-
-    // =======================================================
+    // =====================================================
     // اختلاف صحيح
-    // =======================================================
+    // =====================================================
 
     if (hitIndex >= 0) {
       playSound(
@@ -565,69 +452,65 @@ export default function GamePage() {
         [hitIndex]: true,
       };
 
-      setFound(
-        newFound
-      );
+      setFound(newFound);
 
       const newScore =
         score +
         POINTS_PER_DIFF;
 
-      setScore(
-        newScore
-      );
+      setScore(newScore);
 
-      set(
-        ref(
-          db,
-          `players/${playerIdRef.current}/score`
-        ),
-        newScore
-      );
+      if (
+        playerIdRef.current
+      ) {
+        set(
+          ref(
+            db,
+            `players/${playerIdRef.current}/score`
+          ),
+          newScore
+        );
+      }
 
-      // وجد كل الاختلافات
       if (
         Object.keys(
           newFound
         ).length ===
-        pair.differences
-          .length
+        pair.differences.length
       ) {
-        setLocked(
-          true
-        );
+        setLocked(true);
       }
+
+      return;
     }
 
-    // =======================================================
+    // =====================================================
     // ضغط خاطئ
-    // =======================================================
+    // =====================================================
 
-    else {
-      playSound(
-        wrongSoundRef
+    playSound(
+      wrongSoundRef
+    );
+
+    setFlashRed(true);
+
+    setTimeout(() => {
+      setFlashRed(false);
+    }, 300);
+
+    const newAttempts =
+      Math.max(
+        0,
+        attemptsLeft - 1
       );
 
-      setFlashRed(
-        true
-      );
+    setAttemptsLeft(
+      newAttempts
+    );
 
-      setTimeout(
-        () =>
-          setFlashRed(
-            false
-          ),
-        300
-      );
-
-      const newAttempts =
-        attemptsLeft -
-        1;
-
-      setAttemptsLeft(
-        newAttempts
-      );
-
+    if (
+      playerIdRef.current
+    ) {
       set(
         ref(
           db,
@@ -635,25 +518,21 @@ export default function GamePage() {
         ),
         newAttempts
       );
+    }
 
-      if (
-        newAttempts <= 0
-      ) {
-        setLocked(
-          true
-        );
-      }
+    if (
+      newAttempts <= 0
+    ) {
+      setLocked(true);
     }
   }
 
   // =========================================================
-  // اللاعبين
+  // قائمة اللاعبين
   // =========================================================
 
   const playersList =
-    Object.entries(
-      players
-    ).map(
+    Object.entries(players).map(
       ([id, p]) => ({
         id,
         ...p,
@@ -661,16 +540,10 @@ export default function GamePage() {
     );
 
   const topSeats =
-    playersList.slice(
-      0,
-      5
-    );
+    playersList.slice(0, 5);
 
   const bottomSeats =
-    playersList.slice(
-      5,
-      10
-    );
+    playersList.slice(5, 10);
 
   const sortedLeaderboard =
     [...playersList].sort(
@@ -681,30 +554,24 @@ export default function GamePage() {
 
   const playerCompleted =
     pair &&
-    Object.keys(
-      found
-    ).length ===
-      pair.differences
-        .length;
+    Object.keys(found)
+      .length ===
+      pair.differences.length;
 
   // =========================================================
   // الواجهة
   // =========================================================
 
   return (
-    <main
-      style={styles.page}
-    >
-      {/* ---------- خلفية الفيديو ---------- */}
+    <main style={styles.page}>
+      {/* الخلفية */}
 
       <video
         autoPlay
         loop
         muted
         playsInline
-        style={
-          styles.bgVideo
-        }
+        style={styles.bgVideo}
       >
         <source
           src="/casino-background.MP4"
@@ -713,12 +580,10 @@ export default function GamePage() {
       </video>
 
       <div
-        style={
-          styles.overlay
-        }
+        style={styles.overlay}
       />
 
-      {/* ---------- الأصوات ---------- */}
+      {/* الأصوات */}
 
       <audio
         ref={musicRef}
@@ -727,25 +592,19 @@ export default function GamePage() {
       />
 
       <audio
-        ref={
-          correctSoundRef
-        }
+        ref={correctSoundRef}
         src="/sounds/correct.mp3"
       />
 
       <audio
-        ref={
-          wrongSoundRef
-        }
+        ref={wrongSoundRef}
         src="/sounds/wrong.mp3"
       />
 
-      {/* ---------- زر الموسيقى ---------- */}
+      {/* زر الموسيقى */}
 
       <button
-        style={
-          styles.muteBtn
-        }
+        style={styles.muteBtn}
         onClick={() =>
           setMuted(
             (m) => !m
@@ -757,7 +616,7 @@ export default function GamePage() {
           : "🔊"}
       </button>
 
-      {/* ---------- إشعار دخول لاعب ---------- */}
+      {/* إشعار دخول لاعب */}
 
       {joinToast && (
         <div
@@ -773,17 +632,14 @@ export default function GamePage() {
       {/* العد التنازلي */}
       {/* ================================================= */}
 
-      {countdown !==
-        null && (
+      {countdown !== null && (
         <div
           style={
             styles.countdownOverlay
           }
         >
           <div
-            key={
-              countdown
-            }
+            key={countdown}
             style={
               styles.countdownNumber
             }
@@ -802,15 +658,12 @@ export default function GamePage() {
       )}
 
       {/* ================================================= */}
-      {/* انتظار اختيار الصور */}
+      {/* انتظار الصور */}
       {/* ================================================= */}
 
-      {!pairId ||
-      !pair ? (
+      {!pairId || !pair ? (
         <div
-          style={
-            styles.center
-          }
+          style={styles.center}
         >
           <p
             style={{
@@ -826,7 +679,9 @@ export default function GamePage() {
         </div>
       ) : (
         <>
-          {/* ---------- شريط المعلومات ---------- */}
+          {/* ================================================= */}
+          {/* شريط المعلومات */}
+          {/* ================================================= */}
 
           <div
             style={
@@ -837,8 +692,7 @@ export default function GamePage() {
               style={{
                 color:
                   "#f8d46b",
-                fontWeight:
-                  900,
+                fontWeight: 900,
                 fontSize: 20,
               }}
             >
@@ -888,7 +742,7 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* ---------- المقاعد العلوية ---------- */}
+          {/* المقاعد العلوية */}
 
           {!roundEnded && (
             <SeatRow
@@ -924,10 +778,7 @@ export default function GamePage() {
                   }
                 >
                   {sortedLeaderboard.map(
-                    (
-                      p,
-                      i
-                    ) => (
+                    (p, i) => (
                       <div
                         key={
                           p.id
@@ -995,7 +846,8 @@ export default function GamePage() {
                 >
                   بانتظار أن
                   يبدأ المضيف
-                  الجولة التالية...
+                  الجولة
+                  التالية...
                 </p>
               </div>
             ) : (
@@ -1111,11 +963,6 @@ export default function GamePage() {
                   null
                     ? 0
                     : 1,
-                pointerEvents:
-                  countdown !==
-                  null
-                    ? "none"
-                    : "auto",
               }}
             >
               <ImageBox
@@ -1138,6 +985,12 @@ export default function GamePage() {
                   setZoomSrc(
                     pair.image1
                   )
+                }
+                disabled={
+                  countdown !==
+                    null ||
+                  remaining <=
+                    0
                 }
               />
 
@@ -1162,11 +1015,17 @@ export default function GamePage() {
                     pair.image2
                   )
                 }
+                disabled={
+                  countdown !==
+                    null ||
+                  remaining <=
+                    0
+                }
               />
             </div>
           )}
 
-          {/* ---------- المقاعد السفلية ---------- */}
+          {/* المقاعد السفلية */}
 
           {!roundEnded && (
             <SeatRow
@@ -1176,9 +1035,7 @@ export default function GamePage() {
             />
           )}
 
-          {/* ================================================= */}
           {/* رسالة حالة اللاعب */}
-          {/* ================================================= */}
 
           {locked &&
             !roundEnded && (
@@ -1215,9 +1072,7 @@ export default function GamePage() {
           }
         >
           <img
-            src={
-              zoomSrc
-            }
+            src={zoomSrc}
             alt="zoom"
             style={
               styles.zoomImg
@@ -1228,11 +1083,10 @@ export default function GamePage() {
             style={
               styles.zoomClose
             }
-            onClick={() =>
-              setZoomSrc(
-                null
-              )
-            }
+            onClick={(e) => {
+              e.stopPropagation();
+              setZoomSrc(null);
+            }}
           >
             ✕
           </button>
@@ -1253,51 +1107,85 @@ function ImageBox({
   differences,
   locked,
   onZoom,
+  disabled,
 }) {
+  const handlePointerDown = (e) => {
+    if (
+      disabled ||
+      locked
+    ) {
+      return;
+    }
+
+    onClick(e);
+  };
+
   return (
     <div
       style={
         styles.imgWrapOuter
       }
     >
+      {/* زر التكبير */}
+
       <button
+        type="button"
         style={
           styles.zoomBtn
         }
-        onClick={
-          onZoom
-        }
+        onPointerDown={(e) => {
+          e.stopPropagation();
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onZoom();
+        }}
       >
         🔍
       </button>
 
+      {/* ================================================= */}
+      {/* منطقة الصورة القابلة للضغط */}
+      {/* ================================================= */}
+
       <div
         style={{
           ...styles.imgWrap,
-          cursor: locked
-            ? "not-allowed"
-            : "crosshair",
+          cursor:
+            disabled ||
+            locked
+              ? "not-allowed"
+              : "crosshair",
+          touchAction:
+            "none",
+          pointerEvents:
+            "auto",
         }}
-        onClick={
-          onClick
+        onPointerDown={
+          handlePointerDown
         }
       >
         <img
           src={src}
           alt=""
-          style={
-            styles.img
-          }
-          draggable={
-            false
-          }
+          style={{
+            ...styles.img,
+            pointerEvents:
+              "none",
+          }}
+          draggable={false}
         />
 
+        {/* العلامات لا تمنع الضغط */}
         {Object.keys(
           found
         ).map((i) => {
           const d =
             differences[i];
+
+          if (!d) {
+            return null;
+          }
 
           return (
             <div
@@ -1307,13 +1195,13 @@ function ImageBox({
                 left: `${d.x}%`,
                 top: `${d.y}%`,
                 width: `${
-                  d.radius *
-                  2
+                  d.radius * 2
                 }%`,
                 height: `${
-                  d.radius *
-                  2
+                  d.radius * 2
                 }%`,
+                pointerEvents:
+                  "none",
               }}
             />
           );
@@ -1496,8 +1384,6 @@ const styles = {
       "10px 18px",
     borderRadius:
       20,
-    animation:
-      "none",
   },
 
   center: {
@@ -1516,6 +1402,8 @@ const styles = {
       "flex",
     justifyContent:
       "space-around",
+    alignItems:
+      "center",
     padding: 15,
     background:
       "rgba(232,184,74,0.08)",
@@ -1564,7 +1452,8 @@ const styles = {
       10,
     color:
       "#fff",
-    fontSize: 24,
+    fontSize:
+      24,
     fontWeight:
       700,
     letterSpacing:
@@ -1670,7 +1559,7 @@ const styles = {
       "absolute",
     top: 8,
     right: 8,
-    zIndex: 5,
+    zIndex: 10,
     background:
       "rgba(0,0,0,0.6)",
     border:
@@ -1694,6 +1583,8 @@ const styles = {
       12,
     overflow:
       "hidden",
+    width:
+      "100%",
   },
 
   img: {
@@ -1702,6 +1593,10 @@ const styles = {
     display:
       "block",
     userSelect:
+      "none",
+    WebkitUserSelect:
+      "none",
+    WebkitTouchCallout:
       "none",
   },
 
@@ -1716,6 +1611,8 @@ const styles = {
       "50%",
     boxShadow:
       "0 0 15px rgba(0,255,136,0.6)",
+    pointerEvents:
+      "none",
   },
 
   lockedBanner: {
@@ -1828,9 +1725,9 @@ const styles = {
   },
 };
 
-/*
-  Animation للعد التنازلي
-*/
+// =========================================================
+// Animation
+// =========================================================
 
 if (
   typeof document !==
