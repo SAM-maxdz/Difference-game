@@ -4,17 +4,17 @@ import { useState, useRef, useCallback } from "react";
 import { ref, push, set } from "firebase/database";
 import { db } from "../../../lib/firebase";
 
-// أداة الأدمن: تحديد نقاط الاختلاف بالضغط على الصورة
-// ملاحظة مهمة: هذي الأداة ما ترفعش الصور لأي سيرفر.
-// أنت (المصمم) ترفع الصور يدوياً لمجلد public/pairs/<اسم-الزوج>/ عبر GitHub
-// نفس الطريقة اللي ديرتها مع الأفاتارات والفيديو.
-// هذي الأداة بس تحسبلك إحداثيات نقاط الاختلاف وتربطها بمسار الصورتين
-// وتحفظ كل شي في Firebase (بدون Storage، بدون خطة Blaze).
+// أداة الإدارة: تحديد نقاط الاختلاف بالضغط على الصورة
+// ملاحظة مهمة: هذه الأداة لا ترفع الصور إلى أي خادم.
+// يقوم المصمم برفع الصور يدوياً إلى المجلد public/pairs/<اسم-الزوج>/ عبر GitHub
+// بنفس الطريقة التي تم بها رفع الصور الرمزية والفيديو.
+// هذه الأداة تقوم فقط بحساب إحداثيات نقاط الاختلاف وربطها بمسار الصورتين
+// وحفظ كل ذلك في Firebase (دون استخدام Storage، ودون الحاجة لخطة Blaze).
 
 export default function DifferencesAdmin() {
-  const [image1, setImage1] = useState(null); // { file, url } - للمعاينة فقط محلياً
+  const [image1, setImage1] = useState(null); // { file, url } - للمعاينة المحلية فقط
   const [image2, setImage2] = useState(null);
-  const [image1Path, setImage1Path] = useState(""); // المسار الحقيقي في public/
+  const [image1Path, setImage1Path] = useState(""); // المسار الحقيقي داخل public/
   const [image2Path, setImage2Path] = useState("");
   const [points, setPoints] = useState([]); // [{ id, x, y, radius }]
   const [selectedPointId, setSelectedPointId] = useState(null);
@@ -62,7 +62,7 @@ export default function DifferencesAdmin() {
   };
 
   const clearAll = () => {
-    if (confirm("متأكد تبي تمسح كل النقاط؟")) setPoints([]);
+    if (confirm("هل أنت متأكد من رغبتك في مسح جميع النقاط؟")) setPoints([]);
   };
 
   const jsonPreview = JSON.stringify(
@@ -87,7 +87,7 @@ export default function DifferencesAdmin() {
   const saveToFirebase = async () => {
     if (!image1Path || !image2Path || points.length === 0 || !level) {
       alert(
-        "لازم: رقم المستوى + مسار الصورتين في public/ + نقاط اختلاف محددة"
+        "يجب تحديد رقم المستوى، مسار الصورتين داخل public/، ونقاط الاختلاف"
       );
       return;
     }
@@ -104,11 +104,11 @@ export default function DifferencesAdmin() {
         differences: points.map(({ x, y, radius }) => ({ x, y, radius })),
         createdAt: Date.now(),
       });
-      setSavedMsg("تم الحفظ في Firebase ✅ (لا تنسى ترفع الصور فعلياً لنفس المسار في public/)");
+      setSavedMsg("تم الحفظ في Firebase ✅ (لا تنسَ رفع الصور فعلياً إلى نفس المسار داخل public/)");
       setTimeout(() => setSavedMsg(""), 5000);
     } catch (err) {
       console.error(err);
-      alert("صار خطأ بالحفظ، شوف الكونسول");
+      alert("حدث خطأ أثناء الحفظ، يرجى مراجعة وحدة التحكم (Console)");
     } finally {
       setSaving(false);
     }
@@ -119,10 +119,10 @@ export default function DifferencesAdmin() {
       <h1 style={styles.title}>🎯 أداة تحديد نقاط الاختلاف</h1>
 
       <div style={styles.noticeBox}>
-        ⚠️ هذي الأداة للمعاينة وحساب الإحداثيات فقط. الصور اللي ترفعها هون
-        محلية بس على شاشتك، لازم بعدين تحطها يدوياً في مجلد
-        <code style={styles.code}> public/pairs/اسم-الزوج/</code> عبر GitHub،
-        وتكتب نفس المسار في الحقول تحت.
+        ⚠️ هذه الأداة مخصصة للمعاينة وحساب الإحداثيات فقط. الصور التي ترفعها
+        هنا محفوظة محلياً على جهازك فقط، ويجب عليك لاحقاً وضعها يدوياً في
+        المجلد <code style={styles.code}>public/pairs/اسم-الزوج/</code> عبر
+        GitHub، ثم كتابة نفس المسار في الحقول أدناه.
       </div>
 
       <div style={styles.topControls}>
@@ -162,7 +162,7 @@ export default function DifferencesAdmin() {
       <div style={styles.uploadRow}>
         <div style={styles.uploadBox}>
           <label style={styles.uploadLabel}>
-            صورة 1 محلياً (للمعاينة وتحديد النقاط)
+            الصورة الأولى محلياً (للمعاينة وتحديد النقاط)
             <input type="file" accept="image/*" onChange={handleFile(setImage1)} />
           </label>
           <input
@@ -174,7 +174,7 @@ export default function DifferencesAdmin() {
         </div>
         <div style={styles.uploadBox}>
           <label style={styles.uploadLabel}>
-            صورة 2 محلياً (للمقارنة البصرية فقط)
+            الصورة الثانية محلياً (للمقارنة البصرية فقط)
             <input type="file" accept="image/*" onChange={handleFile(setImage2)} />
           </label>
           <input
