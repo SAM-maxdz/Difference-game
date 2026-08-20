@@ -6,7 +6,7 @@ import { ref, onValue, set } from "firebase/database";
 
 const ATTEMPTS_START = 5;
 const POINTS_PER_DIFF = 50;
-const REVEAL_BEFORE_LEADERBOARD = 10;
+const REVEAL_BEFORE_LEADERBOARD = 5;
 
 export default function GamePage() {
   const [pairId, setPairId] = useState(null);
@@ -202,23 +202,17 @@ export default function GamePage() {
         String(startedAt)
       );
 
+      // ملاحظة: النقاط لا تُصفَّر هنا عمدًا،
+      // لتبقى تراكمية عبر كل الجولات ويكون
+      // التصنيف تصنيفًا عامًا للعبة كلها.
       setFound({});
       setAttemptsLeft(
         ATTEMPTS_START
       );
-      setScore(0);
       setLocked(false);
       setRoundEnded(false);
       setShowLeaderboard(false);
       setRemaining(0);
-
-      set(
-        ref(
-          db,
-          `players/${playerIdRef.current}/score`
-        ),
-        0
-      );
 
       set(
         ref(
@@ -291,8 +285,14 @@ export default function GamePage() {
               actualStart) /
             1000;
 
+          // مدة الجولة: أولوية للمدة التي اختارها
+          // المضيف عند بدء الجولة (roundDuration)،
+          // وإن لم تكن موجودة نستخدم timeLimit
+          // المخزّن مع الصورة كاحتياط.
           const limit =
-            Number(pair.timeLimit) || 0;
+            Number(data.roundDuration) ||
+            Number(pair.timeLimit) ||
+            0;
 
           const rem = Math.max(
             0,
@@ -394,6 +394,20 @@ export default function GamePage() {
         );
 
         setPlayers(data);
+
+        // مزامنة النقاط المحلية مع القيمة
+        // المخزّنة في Firebase (مهم الآن لأن
+        // النقاط تراكمية عبر الجولات، فلو
+        // تم تحديث الصفحة يجب ألا تُفقد).
+        if (
+          playerIdRef.current &&
+          data[playerIdRef.current]
+        ) {
+          setScore(
+            data[playerIdRef.current]
+              .score || 0
+          );
+        }
       }
     );
 
