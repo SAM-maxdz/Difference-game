@@ -11,18 +11,14 @@ const REVEAL_BEFORE_LEADERBOARD = 10;
 export default function GamePage() {
   const [pairId, setPairId] = useState(null);
   const [pair, setPair] = useState(null);
-
   const [startedAt, setStartedAt] = useState(null);
-  const [gameStatus, setGameStatus] = useState("waiting");
-  const [gameTimeLimit, setGameTimeLimit] = useState(null);
-
   const [remaining, setRemaining] = useState(0);
+
   const [countdown, setCountdown] = useState(null);
 
   const [found, setFound] = useState({});
   const [attemptsLeft, setAttemptsLeft] =
     useState(ATTEMPTS_START);
-
   const [score, setScore] = useState(0);
 
   const [flashRed, setFlashRed] = useState(false);
@@ -44,19 +40,13 @@ export default function GamePage() {
   const correctSoundRef = useRef(null);
   const wrongSoundRef = useRef(null);
 
-  // =====================================================
-  // رقم اللاعب
-  // =====================================================
-
+  // ---------- رقم اللاعب ----------
   useEffect(() => {
     playerIdRef.current =
       sessionStorage.getItem("playerId");
   }, []);
 
-  // =====================================================
-  // حالة اللعبة + الصورة + وقت الجولة
-  // =====================================================
-
+  // ---------- حالة اللعبة ----------
   useEffect(() => {
     const gameRef = ref(db, "game");
 
@@ -72,28 +62,15 @@ export default function GamePage() {
         setStartedAt(
           data.startedAt || null
         );
-
-        setGameStatus(
-          data.status || "waiting"
-        );
-
-        setGameTimeLimit(
-          data.timeLimit || null
-        );
       }
     );
 
     return () => unsubscribe();
   }, []);
 
-  // =====================================================
-  // العد التنازلي 5 → 1
-  // =====================================================
-
+  // ---------- العد التنازلي ----------
   useEffect(() => {
     const gameRef = ref(db, "game");
-
-    let interval = null;
 
     const unsubscribe = onValue(
       gameRef,
@@ -105,74 +82,44 @@ export default function GamePage() {
           !data.countdownStartedAt
         ) {
           setCountdown(null);
-
-          if (interval) {
-            clearInterval(interval);
-            interval = null;
-          }
-
           return;
         }
 
         const countdownStartedAt =
-          Number(
-            data.countdownStartedAt
-          );
+          data.countdownStartedAt;
 
         const updateCountdown = () => {
           const elapsed =
-            Math.max(
-              0,
-              Date.now() -
-                countdownStartedAt
-            ) / 1000;
+            (Date.now() -
+              countdownStartedAt) /
+            1000;
 
-          /*
-            5 → 4 → 3 → 2 → 1
-            وبعد انتهاء الـ5 ثواني تختفي
-          */
           const value =
-            5 -
-            Math.floor(elapsed);
+            5 - Math.floor(elapsed);
 
           if (value > 0) {
             setCountdown(value);
           } else {
             setCountdown(null);
-
-            if (interval) {
-              clearInterval(interval);
-              interval = null;
-            }
           }
         };
 
         updateCountdown();
 
-        if (interval) {
-          clearInterval(interval);
-        }
-
-        interval = setInterval(
+        const interval = setInterval(
           updateCountdown,
-          50
+          100
         );
+
+        return () =>
+          clearInterval(interval);
       }
     );
 
-    return () => {
-      unsubscribe();
-
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+    return () => unsubscribe();
   }, []);
 
-  // =====================================================
-  // بيانات الصور
-  // =====================================================
-
+  // ---------- بيانات الصور ----------
   useEffect(() => {
     if (!pairId) return;
 
@@ -184,19 +131,14 @@ export default function GamePage() {
     const unsubscribe = onValue(
       pairRef,
       (snapshot) => {
-        setPair(
-          snapshot.val()
-        );
+        setPair(snapshot.val());
       }
     );
 
     return () => unsubscribe();
   }, [pairId]);
 
-  // =====================================================
-  // تصفير الجولة الجديدة
-  // =====================================================
-
+  // ---------- تصفير الجولة الجديدة ----------
   useEffect(() => {
     if (
       !pairId ||
@@ -228,6 +170,7 @@ export default function GamePage() {
       setLocked(false);
       setRoundEnded(false);
       setShowLeaderboard(false);
+      setRemaining(0);
 
       set(
         ref(
@@ -247,58 +190,47 @@ export default function GamePage() {
     }
   }, [pairId, startedAt]);
 
-  // =====================================================
-  // عداد وقت اللعب
-  // =====================================================
+  // =========================================================
+  // ---------- عداد وقت اللعب ----------
+  // =========================================================
+  //
+  // مهم:
+  // المضيف يبدأ العد التنازلي 5 ثواني قبل اللعب.
+  // لذلك لا نبدأ حساب وقت اللعبة من startedAt مباشرة.
+  //
+  // نضيف 5 ثواني إلى startedAt.
+  // بهذا:
+  //
+  // ضغط المضيف
+  //       ↓
+  // 5 - 4 - 3 - 2 - 1
+  //       ↓
+  // يبدأ وقت اللعبة الحقيقي
+  //
+  // =========================================================
 
   useEffect(() => {
-    /*
-      مهم:
-      لا نبدأ حساب وقت اللعب أثناء countdown.
-
-      startedAt هو وقت بداية اللعب الحقيقي
-      الذي يرسله المضيف بعد تجهيز العد التنازلي.
-    */
-
     if (
       !pair ||
-      !startedAt ||
-      gameStatus !== "playing"
+      !startedAt
     ) {
       return;
     }
 
-    const duration =
-      Number(
-        gameTimeLimit ||
-          pair.timeLimit ||
-          60
-      );
-
-    let interval = null;
+    // وقت بداية اللعب الحقيقي بعد انتهاء العد التنازلي
+    const actualGameStart =
+      startedAt + 5000;
 
     const updateTimer = () => {
-      const now = Date.now();
-
-      /*
-        حماية إضافية:
-        إذا وصل playing قبل startedAt بلحظات،
-        لا نسمح للعداد أن يبدأ من قيمة خاطئة.
-      */
-      const elapsedMs =
-        Math.max(
-          0,
-          now -
-            Number(startedAt)
-        );
-
       const elapsed =
-        elapsedMs / 1000;
+        (Date.now() -
+          actualGameStart) /
+        1000;
 
       const rem =
         Math.max(
           0,
-          duration -
+          pair.timeLimit -
             elapsed
         );
 
@@ -306,37 +238,23 @@ export default function GamePage() {
 
       if (rem <= 0) {
         setRoundEnded(true);
-
-        if (interval) {
-          clearInterval(interval);
-          interval = null;
-        }
       }
     };
 
+    // تحديث مباشر
     updateTimer();
 
-    interval = setInterval(
-      updateTimer,
-      100
-    );
+    const interval =
+      setInterval(
+        updateTimer,
+        250
+      );
 
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [
-    pair,
-    startedAt,
-    gameStatus,
-    gameTimeLimit,
-  ]);
+    return () =>
+      clearInterval(interval);
+  }, [pair, startedAt]);
 
-  // =====================================================
-  // بعد نهاية الجولة
-  // =====================================================
-
+  // ---------- بعد نهاية الجولة ----------
   useEffect(() => {
     if (!roundEnded) return;
 
@@ -353,10 +271,7 @@ export default function GamePage() {
       clearTimeout(t);
   }, [roundEnded]);
 
-  // =====================================================
-  // اللاعبين
-  // =====================================================
-
+  // ---------- اللاعبين ----------
   useEffect(() => {
     const playersRef =
       ref(db, "players");
@@ -401,10 +316,7 @@ export default function GamePage() {
       unsubscribe();
   }, []);
 
-  // =====================================================
-  // الموسيقى
-  // =====================================================
-
+  // ---------- الموسيقى ----------
   useEffect(() => {
     if (!musicRef.current) return;
 
@@ -420,10 +332,7 @@ export default function GamePage() {
     }
   }, [muted, pairId]);
 
-  // =====================================================
-  // الأصوات
-  // =====================================================
-
+  // ---------- الأصوات ----------
   const playSound = (audioRef) => {
     if (
       muted ||
@@ -440,16 +349,12 @@ export default function GamePage() {
       .catch(() => {});
   };
 
-  // =====================================================
-  // الضغط على الصورة
-  // =====================================================
-
+  // ---------- الضغط على الصورة ----------
   function handleImageClick(e) {
     if (
       locked ||
       roundEnded ||
       countdown !== null ||
-      gameStatus !== "playing" ||
       !pair
     ) {
       return;
@@ -490,10 +395,7 @@ export default function GamePage() {
       }
     );
 
-    // ===================================================
-    // اختلاف صحيح
-    // ===================================================
-
+    // ---------- اختلاف صحيح ----------
     if (hitIndex >= 0) {
       playSound(
         correctSoundRef
@@ -531,10 +433,7 @@ export default function GamePage() {
       }
     }
 
-    // ===================================================
-    // ضغط خاطئ
-    // ===================================================
-
+    // ---------- ضغط خاطئ ----------
     else {
       playSound(
         wrongSoundRef
@@ -543,8 +442,7 @@ export default function GamePage() {
       setFlashRed(true);
 
       setTimeout(
-        () =>
-          setFlashRed(false),
+        () => setFlashRed(false),
         300
       );
 
@@ -570,10 +468,6 @@ export default function GamePage() {
       }
     }
   }
-
-  // =====================================================
-  // بيانات اللاعبين
-  // =====================================================
 
   const playersList =
     Object.entries(players).map(
@@ -602,15 +496,9 @@ export default function GamePage() {
       .length ===
       pair.differences.length;
 
-  // =====================================================
-  // العرض
-  // =====================================================
-
   return (
     <main style={styles.page}>
-
       {/* ---------- خلفية الفيديو ---------- */}
-
       <video
         autoPlay
         loop
@@ -629,7 +517,6 @@ export default function GamePage() {
       />
 
       {/* ---------- الأصوات ---------- */}
-
       <audio
         ref={musicRef}
         loop
@@ -647,7 +534,6 @@ export default function GamePage() {
       />
 
       {/* ---------- زر الموسيقى ---------- */}
-
       <button
         style={styles.muteBtn}
         onClick={() =>
@@ -662,7 +548,6 @@ export default function GamePage() {
       </button>
 
       {/* ---------- إشعار دخول لاعب ---------- */}
-
       {joinToast && (
         <div
           style={
@@ -703,7 +588,7 @@ export default function GamePage() {
       )}
 
       {/* ================================================= */}
-      {/* انتظار اللعبة */}
+      {/* انتظار اختيار الصور */}
       {/* ================================================= */}
 
       {!pairId || !pair ? (
@@ -724,11 +609,7 @@ export default function GamePage() {
         </div>
       ) : (
         <>
-
-          {/* ================================================= */}
-          {/* شريط المعلومات */}
-          {/* ================================================= */}
-
+          {/* ---------- شريط المعلومات ---------- */}
           <div
             style={
               styles.topBar
@@ -788,10 +669,7 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* ================================================= */}
-          {/* المقاعد العلوية */}
-          {/* ================================================= */}
-
+          {/* ---------- المقاعد العلوية ---------- */}
           {!roundEnded && (
             <SeatRow
               seats={
@@ -805,9 +683,7 @@ export default function GamePage() {
           {/* ================================================= */}
 
           {roundEnded ? (
-
             showLeaderboard ? (
-
               <div
                 style={
                   styles.results
@@ -900,9 +776,7 @@ export default function GamePage() {
                   التالية...
                 </p>
               </div>
-
             ) : (
-
               <div
                 style={
                   styles.revealFade
@@ -997,11 +871,8 @@ export default function GamePage() {
                   )}
                 </div>
               </div>
-
             )
-
           ) : (
-
             /* ================================================= */
             /* الصور أثناء اللعب */
             /* ================================================= */
@@ -1009,22 +880,15 @@ export default function GamePage() {
             <div
               style={{
                 ...styles.imagesRow,
-
                 filter:
                   flashRed
                     ? "brightness(1.5) saturate(2)"
                     : "none",
-
-                /*
-                  الصور تكون مخفية أثناء العد
-                  وتظهر فور انتهاء العد.
-                */
                 opacity:
                   countdown !==
                   null
                     ? 0
                     : 1,
-
                 pointerEvents:
                   countdown !==
                   null
@@ -1032,7 +896,6 @@ export default function GamePage() {
                     : "auto",
               }}
             >
-
               <ImageBox
                 src={
                   pair.image1
@@ -1078,14 +941,10 @@ export default function GamePage() {
                   )
                 }
               />
-
             </div>
           )}
 
-          {/* ================================================= */}
-          {/* المقاعد السفلية */}
-          {/* ================================================= */}
-
+          {/* ---------- المقاعد السفلية ---------- */}
           {!roundEnded && (
             <SeatRow
               seats={
@@ -1114,7 +973,6 @@ export default function GamePage() {
                   : "🔒 خلصت محاولاتك، استنى نهاية الجولة"}
               </div>
             )}
-
         </>
       )}
 
@@ -1155,7 +1013,6 @@ export default function GamePage() {
           </button>
         </div>
       )}
-
     </main>
   );
 }
@@ -1445,10 +1302,6 @@ const styles = {
       "1px solid rgba(232,184,74,0.3)",
   },
 
-  // =====================================================
-  // العد التنازلي
-  // =====================================================
-
   countdownOverlay: {
     position:
       "fixed",
@@ -1493,10 +1346,6 @@ const styles = {
     letterSpacing:
       2,
   },
-
-  // =====================================================
-  // المقاعد
-  // =====================================================
 
   seatRow: {
     display:
@@ -1572,10 +1421,6 @@ const styles = {
       "#aaa",
   },
 
-  // =====================================================
-  // الصور
-  // =====================================================
-
   imagesRow: {
     display:
       "flex",
@@ -1649,10 +1494,6 @@ const styles = {
       "0 0 15px rgba(0,255,136,0.6)",
   },
 
-  // =====================================================
-  // رسالة انتهاء المحاولات
-  // =====================================================
-
   lockedBanner: {
     textAlign:
       "center",
@@ -1667,10 +1508,6 @@ const styles = {
     animation:
       "none",
   },
-
-  // =====================================================
-  // التصنيف
-  // =====================================================
 
   results: {
     textAlign:
@@ -1721,10 +1558,6 @@ const styles = {
       "cover",
   },
 
-  // =====================================================
-  // التكبير
-  // =====================================================
-
   zoomOverlay: {
     position:
       "fixed",
@@ -1771,10 +1604,9 @@ const styles = {
   },
 };
 
-// =========================================================
-// Animation العد التنازلي
-// =========================================================
-
+/*
+  Animation للعد التنازلي
+*/
 if (
   typeof document !==
   "undefined"
