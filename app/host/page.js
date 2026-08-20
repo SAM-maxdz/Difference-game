@@ -19,6 +19,12 @@ export default function HostPage() {
   }, []);
 
   useEffect(() => {
+    if (authorized) {
+      set(ref(db, "game/status"), "waiting");
+    }
+  }, [authorized]);
+
+  useEffect(() => {
     if (!authorized) return;
     const playersRef = ref(db, "players");
     const unsubscribe = onValue(playersRef, (snapshot) => {
