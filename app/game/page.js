@@ -1,213 +1,375 @@
 "use client";
+
 import { useState, useEffect, useRef } from "react";
 import { db } from "../../lib/firebase";
 import { ref, onValue, set } from "firebase/database";
 
 const ATTEMPTS_START = 5;
 const POINTS_PER_DIFF = 50;
-const REVEAL_BEFORE_LEADERBOARD = 10; // سنغيرها لاحقًا إلى 5
+const REVEAL_BEFORE_LEADERBOARD = 10;
 
 export default function GamePage() {
   const [pairId, setPairId] = useState(null);
   const [pair, setPair] = useState(null);
   const [startedAt, setStartedAt] = useState(null);
   const [remaining, setRemaining] = useState(0);
+
+  const [countdown, setCountdown] = useState(null);
+
   const [found, setFound] = useState({});
-  const [attemptsLeft, setAttemptsLeft] = useState(ATTEMPTS_START);
+  const [attemptsLeft, setAttemptsLeft] =
+    useState(ATTEMPTS_START);
   const [score, setScore] = useState(0);
+
   const [flashRed, setFlashRed] = useState(false);
   const [locked, setLocked] = useState(false);
   const [roundEnded, setRoundEnded] = useState(false);
+
   const [players, setPlayers] = useState({});
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] =
+    useState(false);
+
   const [muted, setMuted] = useState(false);
   const [zoomSrc, setZoomSrc] = useState(null);
   const [joinToast, setJoinToast] = useState(null);
 
   const playerIdRef = useRef(null);
   const knownPlayerIds = useRef(new Set());
+
   const musicRef = useRef(null);
   const correctSoundRef = useRef(null);
   const wrongSoundRef = useRef(null);
 
+  // ---------- رقم اللاعب ----------
   useEffect(() => {
-    playerIdRef.current = sessionStorage.getItem("playerId");
+    playerIdRef.current =
+      sessionStorage.getItem("playerId");
   }, []);
 
   // ---------- حالة اللعبة ----------
   useEffect(() => {
     const gameRef = ref(db, "game");
 
-    const unsubscribe = onValue(gameRef, (snapshot) => {
-      const data = snapshot.val() || {};
+    const unsubscribe = onValue(
+      gameRef,
+      (snapshot) => {
+        const data = snapshot.val() || {};
 
-      setPairId(data.currentPairId || null);
-      setStartedAt(data.startedAt || null);
-    });
+        setPairId(
+          data.currentPairId || null
+        );
+
+        setStartedAt(
+          data.startedAt || null
+        );
+      }
+    );
 
     return () => unsubscribe();
   }, []);
 
-  // ---------- بيانات المستوى الحالي ----------
+  // ---------- العد التنازلي ----------
+  useEffect(() => {
+    const gameRef = ref(db, "game");
+
+    const unsubscribe = onValue(
+      gameRef,
+      (snapshot) => {
+        const data = snapshot.val() || {};
+
+        if (
+          data.status !== "countdown" ||
+          !data.countdownStartedAt
+        ) {
+          setCountdown(null);
+          return;
+        }
+
+        const countdownStartedAt =
+          data.countdownStartedAt;
+
+        const updateCountdown = () => {
+          const elapsed =
+            (Date.now() -
+              countdownStartedAt) /
+            1000;
+
+          const value =
+            5 - Math.floor(elapsed);
+
+          if (value > 0) {
+            setCountdown(value);
+          } else {
+            setCountdown(null);
+          }
+        };
+
+        updateCountdown();
+
+        const interval = setInterval(
+          updateCountdown,
+          100
+        );
+
+        return () =>
+          clearInterval(interval);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // ---------- بيانات الصور ----------
   useEffect(() => {
     if (!pairId) return;
 
-    const pairRef = ref(db, `imagePairs/${pairId}`);
+    const pairRef = ref(
+      db,
+      `imagePairs/${pairId}`
+    );
 
-    const unsubscribe = onValue(pairRef, (snapshot) => {
-      setPair(snapshot.val());
-    });
+    const unsubscribe = onValue(
+      pairRef,
+      (snapshot) => {
+        setPair(snapshot.val());
+      }
+    );
 
     return () => unsubscribe();
   }, [pairId]);
 
-  // ---------- تصفير التقدم عند بداية جولة جديدة ----------
+  // ---------- تصفير الجولة الجديدة ----------
   useEffect(() => {
-    if (!pairId || !playerIdRef.current) return;
+    if (
+      !pairId ||
+      !startedAt ||
+      !playerIdRef.current
+    ) {
+      return;
+    }
 
-    const lastPairId = sessionStorage.getItem("lastPairId");
+    const lastRoundTime =
+      sessionStorage.getItem(
+        "lastRoundTime"
+      );
 
-    if (lastPairId !== pairId) {
-      sessionStorage.setItem("lastPairId", pairId);
+    if (
+      lastRoundTime !==
+      String(startedAt)
+    ) {
+      sessionStorage.setItem(
+        "lastRoundTime",
+        String(startedAt)
+      );
 
       setFound({});
-      setAttemptsLeft(ATTEMPTS_START);
+      setAttemptsLeft(
+        ATTEMPTS_START
+      );
       setScore(0);
       setLocked(false);
       setRoundEnded(false);
       setShowLeaderboard(false);
 
       set(
-        ref(db, `players/${playerIdRef.current}/score`),
+        ref(
+          db,
+          `players/${playerIdRef.current}/score`
+        ),
         0
       );
 
       set(
-        ref(db, `players/${playerIdRef.current}/attemptsLeft`),
+        ref(
+          db,
+          `players/${playerIdRef.current}/attemptsLeft`
+        ),
         ATTEMPTS_START
       );
     }
-  }, [pairId]);
+  }, [pairId, startedAt]);
 
   // ---------- عداد الوقت ----------
   useEffect(() => {
-    if (!pair || !startedAt) return;
+    if (
+      !pair ||
+      !startedAt
+    ) {
+      return;
+    }
 
-    const interval = setInterval(() => {
-      const elapsed = (Date.now() - startedAt) / 1000;
+    const interval =
+      setInterval(() => {
+        const elapsed =
+          (Date.now() -
+            startedAt) /
+          1000;
 
-      const rem = Math.max(
-        0,
-        pair.timeLimit - elapsed
-      );
+        const rem =
+          Math.max(
+            0,
+            pair.timeLimit -
+              elapsed
+          );
 
-      setRemaining(rem);
+        setRemaining(rem);
 
-      if (rem <= 0) {
-        setRoundEnded(true);
-        clearInterval(interval);
-      }
-    }, 250);
+        if (rem <= 0) {
+          setRoundEnded(true);
+          clearInterval(interval);
+        }
+      }, 250);
 
-    return () => clearInterval(interval);
+    return () =>
+      clearInterval(interval);
   }, [pair, startedAt]);
 
-  // ---------- بعد نهاية الجولة: اعرض الاختلافات ثم التصنيف ----------
+  // ---------- بعد نهاية الجولة ----------
   useEffect(() => {
     if (!roundEnded) return;
 
     const t = setTimeout(
-      () => setShowLeaderboard(true),
-      REVEAL_BEFORE_LEADERBOARD * 1000
+      () =>
+        setShowLeaderboard(
+          true
+        ),
+      REVEAL_BEFORE_LEADERBOARD *
+        1000
     );
 
-    return () => clearTimeout(t);
+    return () =>
+      clearTimeout(t);
   }, [roundEnded]);
 
-  // ---------- اللاعبين + إشعار الانضمام ----------
+  // ---------- اللاعبين ----------
   useEffect(() => {
-    const playersRef = ref(db, "players");
+    const playersRef =
+      ref(db, "players");
 
-    const unsubscribe = onValue(playersRef, (snapshot) => {
-      const data = snapshot.val() || {};
+    const unsubscribe = onValue(
+      playersRef,
+      (snapshot) => {
+        const data =
+          snapshot.val() || {};
 
-      Object.entries(data).forEach(([id, p]) => {
-        if (
-          !knownPlayerIds.current.has(id) &&
-          knownPlayerIds.current.size > 0
-        ) {
-          setJoinToast(
-            `🎉 ${p.name} انضم للعبة`
-          );
+        Object.entries(data).forEach(
+          ([id, p]) => {
+            if (
+              !knownPlayerIds.current.has(
+                id
+              ) &&
+              knownPlayerIds.current
+                .size > 0
+            ) {
+              setJoinToast(
+                `🎉 ${p.name} انضم للعبة`
+              );
 
-          setTimeout(
-            () => setJoinToast(null),
-            3000
-          );
-        }
+              setTimeout(
+                () =>
+                  setJoinToast(null),
+                3000
+              );
+            }
 
-        knownPlayerIds.current.add(id);
-      });
+            knownPlayerIds.current.add(
+              id
+            );
+          }
+        );
 
-      setPlayers(data);
-    });
+        setPlayers(data);
+      }
+    );
 
-    return () => unsubscribe();
+    return () =>
+      unsubscribe();
   }, []);
 
   // ---------- الموسيقى ----------
   useEffect(() => {
     if (!musicRef.current) return;
 
-    musicRef.current.volume = 0.25;
+    musicRef.current.volume =
+      0.25;
 
     if (muted) {
       musicRef.current.pause();
     } else {
-      musicRef.current.play().catch(() => {});
+      musicRef.current
+        .play()
+        .catch(() => {});
     }
   }, [muted, pairId]);
 
-  const playSound = (r) => {
-    if (muted || !r.current) return;
+  // ---------- الأصوات ----------
+  const playSound = (audioRef) => {
+    if (
+      muted ||
+      !audioRef.current
+    ) {
+      return;
+    }
 
-    r.current.currentTime = 0;
-    r.current.play().catch(() => {});
+    audioRef.current.currentTime =
+      0;
+
+    audioRef.current
+      .play()
+      .catch(() => {});
   };
 
+  // ---------- الضغط على الصورة ----------
   function handleImageClick(e) {
-    if (locked || roundEnded || !pair) return;
+    if (
+      locked ||
+      roundEnded ||
+      countdown !== null ||
+      !pair
+    ) {
+      return;
+    }
 
     const rect =
       e.currentTarget.getBoundingClientRect();
 
     const xPct =
-      ((e.clientX - rect.left) /
+      ((e.clientX -
+        rect.left) /
         rect.width) *
       100;
 
     const yPct =
-      ((e.clientY - rect.top) /
+      ((e.clientY -
+        rect.top) /
         rect.height) *
       100;
 
     let hitIndex = -1;
 
-    pair.differences.forEach((d, i) => {
-      if (found[i]) return;
+    pair.differences.forEach(
+      (d, i) => {
+        if (found[i]) return;
 
-      const dist = Math.sqrt(
-        (d.x - xPct) ** 2 +
-          (d.y - yPct) ** 2
-      );
+        const dist =
+          Math.sqrt(
+            (d.x - xPct) ** 2 +
+              (d.y - yPct) ** 2
+          );
 
-      if (dist <= d.radius) {
-        hitIndex = i;
+        if (
+          dist <= d.radius
+        ) {
+          hitIndex = i;
+        }
       }
-    });
+    );
 
+    // ---------- اختلاف صحيح ----------
     if (hitIndex >= 0) {
-      playSound(correctSoundRef);
+      playSound(
+        correctSoundRef
+      );
 
       const newFound = {
         ...found,
@@ -217,7 +379,8 @@ export default function GamePage() {
       setFound(newFound);
 
       const newScore =
-        score + POINTS_PER_DIFF;
+        score +
+        POINTS_PER_DIFF;
 
       setScore(newScore);
 
@@ -229,17 +392,22 @@ export default function GamePage() {
         newScore
       );
 
-      // إذا وجد اللاعب جميع الاختلافات
-      // لا تنتهي الجولة، فقط نقفل اللاعب
-      // وننتظر بقية اللاعبين.
+      // وجد كل الاختلافات
       if (
-        Object.keys(newFound).length ===
+        Object.keys(
+          newFound
+        ).length ===
         pair.differences.length
       ) {
         setLocked(true);
       }
-    } else {
-      playSound(wrongSoundRef);
+    }
+
+    // ---------- ضغط خاطئ ----------
+    else {
+      playSound(
+        wrongSoundRef
+      );
 
       setFlashRed(true);
 
@@ -251,7 +419,9 @@ export default function GamePage() {
       const newAttempts =
         attemptsLeft - 1;
 
-      setAttemptsLeft(newAttempts);
+      setAttemptsLeft(
+        newAttempts
+      );
 
       set(
         ref(
@@ -261,18 +431,21 @@ export default function GamePage() {
         newAttempts
       );
 
-      if (newAttempts <= 0) {
+      if (
+        newAttempts <= 0
+      ) {
         setLocked(true);
       }
     }
   }
 
-  const playersList = Object.entries(
-    players
-  ).map(([id, p]) => ({
-    id,
-    ...p,
-  }));
+  const playersList =
+    Object.entries(players).map(
+      ([id, p]) => ({
+        id,
+        ...p,
+      })
+    );
 
   const topSeats =
     playersList.slice(0, 5);
@@ -289,11 +462,13 @@ export default function GamePage() {
 
   const playerCompleted =
     pair &&
-    Object.keys(found).length ===
+    Object.keys(found)
+      .length ===
       pair.differences.length;
 
   return (
     <main style={styles.page}>
+      {/* ---------- خلفية الفيديو ---------- */}
       <video
         autoPlay
         loop
@@ -307,9 +482,11 @@ export default function GamePage() {
         />
       </video>
 
-      <div style={styles.overlay} />
+      <div
+        style={styles.overlay}
+      />
 
-      {/* أصوات */}
+      {/* ---------- الأصوات ---------- */}
       <audio
         ref={musicRef}
         loop
@@ -326,57 +503,114 @@ export default function GamePage() {
         src="/sounds/wrong.mp3"
       />
 
+      {/* ---------- زر الموسيقى ---------- */}
       <button
         style={styles.muteBtn}
         onClick={() =>
-          setMuted((m) => !m)
+          setMuted(
+            (m) => !m
+          )
         }
       >
-        {muted ? "🔇" : "🔊"}
+        {muted
+          ? "🔇"
+          : "🔊"}
       </button>
 
+      {/* ---------- إشعار دخول لاعب ---------- */}
       {joinToast && (
-        <div style={styles.joinToast}>
+        <div
+          style={
+            styles.joinToast
+          }
+        >
           {joinToast}
         </div>
       )}
 
+      {/* ================================================= */}
+      {/* العد التنازلي */}
+      {/* ================================================= */}
+
+      {countdown !== null && (
+        <div
+          style={
+            styles.countdownOverlay
+          }
+        >
+          <div
+            key={countdown}
+            style={
+              styles.countdownNumber
+            }
+          >
+            {countdown}
+          </div>
+
+          <div
+            style={
+              styles.countdownText
+            }
+          >
+            استعد...
+          </div>
+        </div>
+      )}
+
+      {/* ================================================= */}
+      {/* انتظار اختيار الصور */}
+      {/* ================================================= */}
+
       {!pairId || !pair ? (
-        <div style={styles.center}>
+        <div
+          style={styles.center}
+        >
           <p
             style={{
-              color: "#f8d46b",
+              color:
+                "#f8d46b",
               fontSize: 20,
             }}
           >
-            بانتظار قيام المضيف باختيار
+            بانتظار قيام
+            المضيف باختيار
             الصور...
           </p>
         </div>
       ) : (
         <>
-          <div style={styles.topBar}>
+          {/* ---------- شريط المعلومات ---------- */}
+          <div
+            style={
+              styles.topBar
+            }
+          >
             <div
               style={{
-                color: "#f8d46b",
+                color:
+                  "#f8d46b",
                 fontWeight: 900,
                 fontSize: 20,
               }}
             >
               ⏱{" "}
-              {Math.ceil(remaining)}{" "}
+              {Math.ceil(
+                remaining
+              )}{" "}
               ثانية
             </div>
 
             <div
               style={{
-                color: "white",
+                color:
+                  "white",
               }}
             >
               النقاط:{" "}
               <strong
                 style={{
-                  color: "#f8d46b",
+                  color:
+                    "#f8d46b",
                 }}
               >
                 {score}
@@ -385,14 +619,17 @@ export default function GamePage() {
 
             <div
               style={{
-                color: "white",
+                color:
+                  "white",
               }}
             >
-              المحاولات المتبقية:{" "}
+              المحاولات
+              المتبقية:{" "}
               <strong
                 style={{
                   color:
-                    attemptsLeft > 0
+                    attemptsLeft >
+                    0
                       ? "#f8d46b"
                       : "#e04b3f",
                 }}
@@ -402,16 +639,30 @@ export default function GamePage() {
             </div>
           </div>
 
+          {/* ---------- المقاعد العلوية ---------- */}
           {!roundEnded && (
-            <SeatRow seats={topSeats} />
+            <SeatRow
+              seats={
+                topSeats
+              }
+            />
           )}
+
+          {/* ================================================= */}
+          {/* نهاية الجولة */}
+          {/* ================================================= */}
 
           {roundEnded ? (
             showLeaderboard ? (
-              <div style={styles.results}>
+              <div
+                style={
+                  styles.results
+                }
+              >
                 <h2
                   style={{
-                    color: "#f8d46b",
+                    color:
+                      "#f8d46b",
                   }}
                 >
                   🏆 التصنيف
@@ -425,7 +676,9 @@ export default function GamePage() {
                   {sortedLeaderboard.map(
                     (p, i) => (
                       <div
-                        key={p.id}
+                        key={
+                          p.id
+                        }
                         style={
                           styles.leaderboardRow
                         }
@@ -435,13 +688,19 @@ export default function GamePage() {
                             styles.leaderboardRank
                           }
                         >
-                          #{i + 1}
+                          #
+                          {i +
+                            1}
                         </span>
 
                         {p.avatar && (
                           <img
-                            src={p.avatar}
-                            alt={p.name}
+                            src={
+                              p.avatar
+                            }
+                            alt={
+                              p.name
+                            }
                             style={
                               styles.leaderboardAvatar
                             }
@@ -453,7 +712,9 @@ export default function GamePage() {
                             flex: 1,
                           }}
                         >
-                          {p.name}
+                          {
+                            p.name
+                          }
                         </span>
 
                         <span
@@ -462,7 +723,8 @@ export default function GamePage() {
                               "#f8d46b",
                           }}
                         >
-                          {p.score || 0}{" "}
+                          {p.score ||
+                            0}{" "}
                           نقطة
                         </span>
                       </div>
@@ -472,12 +734,16 @@ export default function GamePage() {
 
                 <p
                   style={{
-                    color: "#999",
-                    marginTop: 20,
+                    color:
+                      "#999",
+                    marginTop:
+                      20,
                   }}
                 >
-                  بانتظار أن يبدأ المضيف
-                  الجولة التالية...
+                  بانتظار أن
+                  يبدأ المضيف
+                  الجولة
+                  التالية...
                 </p>
               </div>
             ) : (
@@ -488,8 +754,10 @@ export default function GamePage() {
               >
                 <h3
                   style={{
-                    textAlign: "center",
-                    color: "#f8d46b",
+                    textAlign:
+                      "center",
+                    color:
+                      "#f8d46b",
                   }}
                 >
                   {playerCompleted
@@ -498,15 +766,22 @@ export default function GamePage() {
                 </h3>
 
                 <div
-                  style={styles.imagesRow}
+                  style={
+                    styles.imagesRow
+                  }
                 >
                   {[
                     pair.image1,
                     pair.image2,
                   ].map(
-                    (src, idx) => (
+                    (
+                      src,
+                      idx
+                    ) => (
                       <div
-                        key={idx}
+                        key={
+                          idx
+                        }
                         style={
                           styles.imgWrapOuter
                         }
@@ -517,28 +792,43 @@ export default function GamePage() {
                           }
                         >
                           <img
-                            src={src}
+                            src={
+                              src
+                            }
                             alt=""
-                            style={styles.img}
-                            draggable={false}
+                            style={
+                              styles.img
+                            }
+                            draggable={
+                              false
+                            }
                           />
 
                           {pair.differences.map(
-                            (d, i) => (
+                            (
+                              d,
+                              i
+                            ) => (
                               <div
-                                key={i}
+                                key={
+                                  i
+                                }
                                 style={{
                                   ...styles.foundMarker,
                                   left: `${d.x}%`,
                                   top: `${d.y}%`,
                                   width: `${
-                                    d.radius * 2
+                                    d.radius *
+                                    2
                                   }%`,
                                   height: `${
-                                    d.radius * 2
+                                    d.radius *
+                                    2
                                   }%`,
                                   borderColor:
-                                    found[i]
+                                    found[
+                                      i
+                                    ]
                                       ? "#00ff88"
                                       : "#ffcf00",
                                 }}
@@ -553,24 +843,45 @@ export default function GamePage() {
               </div>
             )
           ) : (
+            /* ================================================= */
+            /* الصور أثناء اللعب */
+            /* ================================================= */
+
             <div
               style={{
                 ...styles.imagesRow,
-                filter: flashRed
-                  ? "brightness(1.5) saturate(2)"
-                  : "none",
+                filter:
+                  flashRed
+                    ? "brightness(1.5) saturate(2)"
+                    : "none",
+                opacity:
+                  countdown !==
+                  null
+                    ? 0
+                    : 1,
+                pointerEvents:
+                  countdown !==
+                  null
+                    ? "none"
+                    : "auto",
               }}
             >
               <ImageBox
-                src={pair.image1}
+                src={
+                  pair.image1
+                }
                 onClick={
                   handleImageClick
                 }
-                found={found}
+                found={
+                  found
+                }
                 differences={
                   pair.differences
                 }
-                locked={locked}
+                locked={
+                  locked
+                }
                 onZoom={() =>
                   setZoomSrc(
                     pair.image1
@@ -579,15 +890,21 @@ export default function GamePage() {
               />
 
               <ImageBox
-                src={pair.image2}
+                src={
+                  pair.image2
+                }
                 onClick={
                   handleImageClick
                 }
-                found={found}
+                found={
+                  found
+                }
                 differences={
                   pair.differences
                 }
-                locked={locked}
+                locked={
+                  locked
+                }
                 onZoom={() =>
                   setZoomSrc(
                     pair.image2
@@ -597,46 +914,69 @@ export default function GamePage() {
             </div>
           )}
 
+          {/* ---------- المقاعد السفلية ---------- */}
           {!roundEnded && (
             <SeatRow
-              seats={bottomSeats}
+              seats={
+                bottomSeats
+              }
             />
           )}
 
-          {locked && !roundEnded && (
-            <div
-              style={{
-                ...styles.lockedBanner,
-                color: playerCompleted
-                  ? "#00ff88"
-                  : "#e04b3f",
-              }}
-            >
-              {playerCompleted
-                ? "🎉 أحسنت! وجدت جميع الاختلافات — انتظر بقية اللاعبين..."
-                : "🔒 خلصت محاولاتك، استنى نهاية الجولة"}
-            </div>
-          )}
+          {/* ================================================= */}
+          {/* رسالة حالة اللاعب */}
+          {/* ================================================= */}
+
+          {locked &&
+            !roundEnded && (
+              <div
+                style={{
+                  ...styles.lockedBanner,
+                  color:
+                    playerCompleted
+                      ? "#00ff88"
+                      : "#e04b3f",
+                }}
+              >
+                {playerCompleted
+                  ? "🎉 أحسنت! وجدت جميع الاختلافات — انتظر بقية اللاعبين..."
+                  : "🔒 خلصت محاولاتك، استنى نهاية الجولة"}
+              </div>
+            )}
         </>
       )}
 
+      {/* ================================================= */}
+      {/* التكبير */}
+      {/* ================================================= */}
+
       {zoomSrc && (
         <div
-          style={styles.zoomOverlay}
+          style={
+            styles.zoomOverlay
+          }
           onClick={() =>
-            setZoomSrc(null)
+            setZoomSrc(
+              null
+            )
           }
         >
           <img
             src={zoomSrc}
             alt="zoom"
-            style={styles.zoomImg}
+            style={
+              styles.zoomImg
+            }
           />
 
           <button
-            style={styles.zoomClose}
+            style={
+              styles.zoomClose
+            }
             onClick={() =>
-              setZoomSrc(null)
+              setZoomSrc(
+                null
+              )
             }
           >
             ✕
@@ -647,6 +987,10 @@ export default function GamePage() {
   );
 }
 
+// =========================================================
+// صورة اللعبة
+// =========================================================
+
 function ImageBox({
   src,
   onClick,
@@ -656,10 +1000,18 @@ function ImageBox({
   onZoom,
 }) {
   return (
-    <div style={styles.imgWrapOuter}>
+    <div
+      style={
+        styles.imgWrapOuter
+      }
+    >
       <button
-        style={styles.zoomBtn}
-        onClick={onZoom}
+        style={
+          styles.zoomBtn
+        }
+        onClick={
+          onZoom
+        }
       >
         🔍
       </button>
@@ -671,128 +1023,182 @@ function ImageBox({
             ? "not-allowed"
             : "crosshair",
         }}
-        onClick={onClick}
+        onClick={
+          onClick
+        }
       >
         <img
           src={src}
           alt=""
-          style={styles.img}
-          draggable={false}
+          style={
+            styles.img
+          }
+          draggable={
+            false
+          }
         />
 
-        {Object.keys(found).map(
-          (i) => {
-            const d = differences[i];
+        {Object.keys(
+          found
+        ).map((i) => {
+          const d =
+            differences[i];
 
-            return (
-              <div
-                key={i}
-                style={{
-                  ...styles.foundMarker,
-                  left: `${d.x}%`,
-                  top: `${d.y}%`,
-                  width: `${
-                    d.radius * 2
-                  }%`,
-                  height: `${
-                    d.radius * 2
-                  }%`,
-                }}
-              />
-            );
-          }
-        )}
+          return (
+            <div
+              key={i}
+              style={{
+                ...styles.foundMarker,
+                left: `${d.x}%`,
+                top: `${d.y}%`,
+                width: `${
+                  d.radius *
+                  2
+                }%`,
+                height: `${
+                  d.radius *
+                  2
+                }%`,
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function SeatRow({ seats }) {
-  if (seats.length === 0)
+// =========================================================
+// المقاعد
+// =========================================================
+
+function SeatRow({
+  seats,
+}) {
+  if (
+    seats.length ===
+    0
+  ) {
     return null;
+  }
 
   return (
-    <div style={styles.seatRow}>
-      {seats.map((p) => (
-        <div
-          key={p.id}
-          style={styles.seat}
-        >
+    <div
+      style={
+        styles.seatRow
+      }
+    >
+      {seats.map(
+        (p) => (
           <div
+            key={
+              p.id
+            }
             style={
-              styles.seatAvatarWrap
+              styles.seat
             }
           >
-            {p.avatar && (
-              <img
-                src={p.avatar}
-                alt={p.name}
-                style={
-                  styles.seatAvatar
-                }
+            <div
+              style={
+                styles.seatAvatarWrap
+              }
+            >
+              {p.avatar && (
+                <img
+                  src={
+                    p.avatar
+                  }
+                  alt={
+                    p.name
+                  }
+                  style={
+                    styles.seatAvatar
+                  }
+                />
+              )}
+
+              <span
+                style={{
+                  ...styles.statusDot,
+                  background:
+                    p.attemptsLeft >
+                    0
+                      ? "#00ff88"
+                      : "#e04b3f",
+                }}
               />
-            )}
+            </div>
 
             <span
-              style={{
-                ...styles.statusDot,
-                background:
-                  p.attemptsLeft > 0
-                    ? "#00ff88"
-                    : "#e04b3f",
-              }}
-            />
+              style={
+                styles.seatName
+              }
+            >
+              {
+                p.name
+              }
+            </span>
+
+            <span
+              style={
+                styles.seatScore
+              }
+            >
+              {p.score ||
+                0}{" "}
+              نقطة
+            </span>
+
+            <span
+              style={
+                styles.seatAttempts
+              }
+            >
+              محاولات:{" "}
+              {p.attemptsLeft ??
+                ATTEMPTS_START}
+            </span>
           </div>
-
-          <span
-            style={styles.seatName}
-          >
-            {p.name}
-          </span>
-
-          <span
-            style={styles.seatScore}
-          >
-            {p.score || 0} نقطة
-          </span>
-
-          <span
-            style={
-              styles.seatAttempts
-            }
-          >
-            محاولات:{" "}
-            {p.attemptsLeft ??
-              ATTEMPTS_START}
-          </span>
-        </div>
-      ))}
+        )
+      )}
     </div>
   );
 }
 
+// =========================================================
+// التصميم
+// =========================================================
+
 const styles = {
   page: {
-    position: "relative",
-    minHeight: "100vh",
+    position:
+      "relative",
+    minHeight:
+      "100vh",
     color: "white",
     fontFamily:
       "Arial, sans-serif",
     padding: 20,
-    overflow: "hidden",
+    overflow:
+      "hidden",
   },
 
   bgVideo: {
-    position: "fixed",
+    position:
+      "fixed",
     inset: 0,
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
+    width:
+      "100%",
+    height:
+      "100%",
+    objectFit:
+      "cover",
     zIndex: -2,
   },
 
   overlay: {
-    position: "fixed",
+    position:
+      "fixed",
     inset: 0,
     background:
       "rgba(3,3,2,0.78)",
@@ -800,23 +1206,28 @@ const styles = {
   },
 
   muteBtn: {
-    position: "fixed",
+    position:
+      "fixed",
     top: 16,
     left: 16,
     zIndex: 20,
     background:
       "rgba(0,0,0,0.5)",
-    border: "1px solid #444",
-    borderRadius: "50%",
+    border:
+      "1px solid #444",
+    borderRadius:
+      "50%",
     width: 44,
     height: 44,
     fontSize: 20,
     color: "#fff",
-    cursor: "pointer",
+    cursor:
+      "pointer",
   },
 
   joinToast: {
-    position: "fixed",
+    position:
+      "fixed",
     top: 20,
     right: 20,
     zIndex: 30,
@@ -824,75 +1235,142 @@ const styles = {
       "rgba(0,0,0,0.75)",
     border:
       "1px solid #f8d46b",
-    color: "#f8d46b",
+    color:
+      "#f8d46b",
     padding:
       "10px 18px",
-    borderRadius: 20,
-    animation: "none",
+    borderRadius:
+      20,
+    animation:
+      "none",
   },
 
   center: {
-    minHeight: "80vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    minHeight:
+      "80vh",
+    display:
+      "flex",
+    alignItems:
+      "center",
+    justifyContent:
+      "center",
   },
 
   topBar: {
-    display: "flex",
+    display:
+      "flex",
     justifyContent:
       "space-around",
     padding: 15,
     background:
       "rgba(232,184,74,0.08)",
-    borderRadius: 12,
-    marginBottom: 12,
+    borderRadius:
+      12,
+    marginBottom:
+      12,
     border:
       "1px solid rgba(232,184,74,0.3)",
   },
 
+  // ---------- العد التنازلي ----------
+  countdownOverlay: {
+    position:
+      "fixed",
+    inset: 0,
+    zIndex: 100,
+    background:
+      "rgba(0,0,0,0.90)",
+    display:
+      "flex",
+    flexDirection:
+      "column",
+    alignItems:
+      "center",
+    justifyContent:
+      "center",
+    backdropFilter:
+      "blur(8px)",
+  },
+
+  countdownNumber: {
+    fontSize:
+      "clamp(100px, 20vw, 220px)",
+    fontWeight:
+      900,
+    color:
+      "#f8d46b",
+    textShadow:
+      "0 0 25px rgba(248,212,107,0.7), 0 0 70px rgba(248,212,107,0.35)",
+    animation:
+      "countdownPop 0.9s ease-out",
+  },
+
+  countdownText: {
+    marginTop:
+      10,
+    color:
+      "#fff",
+    fontSize:
+      24,
+    fontWeight:
+      700,
+    letterSpacing:
+      2,
+  },
+
   seatRow: {
-    display: "flex",
+    display:
+      "flex",
     justifyContent:
       "center",
     gap: 10,
-    flexWrap: "wrap",
-    margin: "10px 0",
+    flexWrap:
+      "wrap",
+    margin:
+      "10px 0",
   },
 
   seat: {
-    display: "flex",
+    display:
+      "flex",
     flexDirection:
       "column",
-    alignItems: "center",
+    alignItems:
+      "center",
     background:
       "rgba(255,255,255,0.07)",
-    borderRadius: 12,
+    borderRadius:
+      12,
     padding:
       "6px 10px",
     minWidth: 76,
   },
 
   seatAvatarWrap: {
-    position: "relative",
+    position:
+      "relative",
   },
 
   seatAvatar: {
     width: 40,
     height: 40,
-    borderRadius: "50%",
-    objectFit: "cover",
+    borderRadius:
+      "50%",
+    objectFit:
+      "cover",
     border:
       "2px solid #f8d46b",
   },
 
   statusDot: {
-    position: "absolute",
+    position:
+      "absolute",
     bottom: 0,
     right: 0,
     width: 10,
     height: 10,
-    borderRadius: "50%",
+    borderRadius:
+      "50%",
     border:
       "2px solid #111",
   },
@@ -904,89 +1382,113 @@ const styles = {
 
   seatScore: {
     fontSize: 10,
-    color: "#f8d46b",
+    color:
+      "#f8d46b",
   },
 
   seatAttempts: {
     fontSize: 9,
-    color: "#aaa",
+    color:
+      "#aaa",
   },
 
   imagesRow: {
-    display: "flex",
+    display:
+      "flex",
     gap: 15,
-    flexWrap: "wrap",
+    flexWrap:
+      "wrap",
     justifyContent:
       "center",
     transition:
-      "filter 0.2s",
+      "opacity 0.5s ease, filter 0.2s",
   },
 
   imgWrapOuter: {
-    position: "relative",
+    position:
+      "relative",
     flex: 1,
     minWidth: 300,
     maxWidth: 600,
   },
 
   zoomBtn: {
-    position: "absolute",
+    position:
+      "absolute",
     top: 8,
     right: 8,
     zIndex: 5,
     background:
       "rgba(0,0,0,0.6)",
-    border: "1px solid #555",
-    borderRadius: 8,
-    color: "#fff",
+    border:
+      "1px solid #555",
+    borderRadius:
+      8,
+    color:
+      "#fff",
     padding:
       "4px 10px",
-    cursor: "pointer",
+    cursor:
+      "pointer",
   },
 
   imgWrap: {
-    position: "relative",
+    position:
+      "relative",
     border:
       "2px solid #333",
-    borderRadius: 12,
-    overflow: "hidden",
+    borderRadius:
+      12,
+    overflow:
+      "hidden",
   },
 
   img: {
-    width: "100%",
-    display: "block",
-    userSelect: "none",
+    width:
+      "100%",
+    display:
+      "block",
+    userSelect:
+      "none",
   },
 
   foundMarker: {
-    position: "absolute",
+    position:
+      "absolute",
     transform:
       "translate(-50%, -50%)",
     border:
       "3px solid #00ff88",
-    borderRadius: "50%",
+    borderRadius:
+      "50%",
     boxShadow:
       "0 0 15px rgba(0,255,136,0.6)",
   },
 
   lockedBanner: {
-    textAlign: "center",
-    marginTop: 16,
+    textAlign:
+      "center",
+    marginTop:
+      16,
     fontSize: 18,
-    fontWeight: 700,
+    fontWeight:
+      700,
   },
 
   revealFade: {
-    animation: "none",
+    animation:
+      "none",
   },
 
   results: {
-    textAlign: "center",
+    textAlign:
+      "center",
     padding: 40,
   },
 
   leaderboardList: {
-    display: "flex",
+    display:
+      "flex",
     flexDirection:
       "column",
     gap: 8,
@@ -997,60 +1499,129 @@ const styles = {
   },
 
   leaderboardRow: {
-    display: "flex",
-    alignItems: "center",
+    display:
+      "flex",
+    alignItems:
+      "center",
     gap: 10,
     background:
       "rgba(255,255,255,0.08)",
     padding:
       "8px 14px",
-    borderRadius: 12,
+    borderRadius:
+      12,
   },
 
   leaderboardRank: {
     width: 30,
-    fontWeight: "bold",
-    color: "#f8d46b",
+    fontWeight:
+      "bold",
+    color:
+      "#f8d46b",
   },
 
   leaderboardAvatar: {
     width: 32,
     height: 32,
-    borderRadius: "50%",
-    objectFit: "cover",
+    borderRadius:
+      "50%",
+    objectFit:
+      "cover",
   },
 
   zoomOverlay: {
-    position: "fixed",
+    position:
+      "fixed",
     inset: 0,
     background:
       "rgba(0,0,0,0.9)",
     zIndex: 50,
-    display: "flex",
-    alignItems: "center",
+    display:
+      "flex",
+    alignItems:
+      "center",
     justifyContent:
       "center",
     padding: 20,
   },
 
   zoomImg: {
-    maxWidth: "95%",
-    maxHeight: "95%",
-    borderRadius: 12,
+    maxWidth:
+      "95%",
+    maxHeight:
+      "95%",
+    borderRadius:
+      12,
   },
 
   zoomClose: {
-    position: "absolute",
+    position:
+      "absolute",
     top: 20,
     right: 20,
     background:
       "rgba(255,255,255,0.15)",
-    border: "none",
-    color: "#fff",
-    borderRadius: "50%",
+    border:
+      "none",
+    color:
+      "#fff",
+    borderRadius:
+      "50%",
     width: 44,
     height: 44,
     fontSize: 20,
-    cursor: "pointer",
+    cursor:
+      "pointer",
   },
 };
+
+/*
+  نضيف Animation للعد التنازلي
+  إلى الصفحة عند تشغيلها.
+*/
+if (
+  typeof document !==
+  "undefined"
+) {
+  if (
+    !document.getElementById(
+      "difference-game-countdown-style"
+    )
+  ) {
+    const style =
+      document.createElement(
+        "style"
+      );
+
+    style.id =
+      "difference-game-countdown-style";
+
+    style.innerHTML = `
+      @keyframes countdownPop {
+        0% {
+          transform: scale(1.5);
+          opacity: 0;
+        }
+
+        45% {
+          transform: scale(0.9);
+          opacity: 1;
+        }
+
+        75% {
+          transform: scale(1.05);
+          opacity: 1;
+        }
+
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+    `;
+
+    document.head.appendChild(
+      style
+    );
+  }
+}
