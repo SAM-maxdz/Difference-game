@@ -5,7 +5,7 @@ import { ref, onValue, set } from "firebase/database";
 
 const ATTEMPTS_START = 5;
 const POINTS_PER_DIFF = 50;
-const REVEAL_BEFORE_LEADERBOARD = 10; // ثواني عرض الاختلافات قبل التصنيف
+const REVEAL_BEFORE_LEADERBOARD = 10; // سنغيرها لاحقًا إلى 5
 
 export default function GamePage() {
   const [pairId, setPairId] = useState(null);
@@ -58,205 +58,408 @@ export default function GamePage() {
   // ---------- تصفير التقدم عند بداية جولة جديدة ----------
   useEffect(() => {
     if (!pairId || !playerIdRef.current) return;
+
     const lastPairId = sessionStorage.getItem("lastPairId");
+
     if (lastPairId !== pairId) {
       sessionStorage.setItem("lastPairId", pairId);
+
       setFound({});
       setAttemptsLeft(ATTEMPTS_START);
       setScore(0);
       setLocked(false);
       setRoundEnded(false);
       setShowLeaderboard(false);
+
       set(ref(db, `players/${playerIdRef.current}/score`), 0);
-      set(ref(db, `players/${playerIdRef.current}/attemptsLeft`), ATTEMPTS_START);
+      set(
+        ref(db, `players/${playerIdRef.current}/attemptsLeft`),
+        ATTEMPTS_START
+      );
     }
   }, [pairId]);
 
   // ---------- عداد الوقت ----------
   useEffect(() => {
     if (!pair || !startedAt) return;
+
     const interval = setInterval(() => {
       const elapsed = (Date.now() - startedAt) / 1000;
       const rem = Math.max(0, pair.timeLimit - elapsed);
+
       setRemaining(rem);
+
       if (rem <= 0) {
         setRoundEnded(true);
         clearInterval(interval);
       }
     }, 250);
+
     return () => clearInterval(interval);
   }, [pair, startedAt]);
 
   // ---------- بعد نهاية الجولة: اعرض الاختلافات ثم التصنيف ----------
   useEffect(() => {
     if (!roundEnded) return;
-    const t = setTimeout(() => setShowLeaderboard(true), REVEAL_BEFORE_LEADERBOARD * 1000);
+
+    const t = setTimeout(
+      () => setShowLeaderboard(true),
+      REVEAL_BEFORE_LEADERBOARD * 1000
+    );
+
     return () => clearTimeout(t);
   }, [roundEnded]);
 
   // ---------- اللاعبين + إشعار الانضمام ----------
   useEffect(() => {
     const playersRef = ref(db, "players");
+
     const unsubscribe = onValue(playersRef, (snapshot) => {
       const data = snapshot.val() || {};
+
       // كشف لاعب جديد
       Object.entries(data).forEach(([id, p]) => {
-        if (!knownPlayerIds.current.has(id) && knownPlayerIds.current.size > 0) {
+        if (
+          !knownPlayerIds.current.has(id) &&
+          knownPlayerIds.current.size > 0
+        ) {
           setJoinToast(`🎉 ${p.name} انضم للعبة`);
+
           setTimeout(() => setJoinToast(null), 3000);
         }
+
         knownPlayerIds.current.add(id);
       });
+
       setPlayers(data);
     });
+
     return () => unsubscribe();
   }, []);
 
   // ---------- الموسيقى ----------
   useEffect(() => {
     if (!musicRef.current) return;
+
     musicRef.current.volume = 0.25;
-    if (muted) musicRef.current.pause();
-    else musicRef.current.play().catch(() => {});
+
+    if (muted) {
+      musicRef.current.pause();
+    } else {
+      musicRef.current.play().catch(() => {});
+    }
   }, [muted, pairId]);
 
   const playSound = (r) => {
     if (muted || !r.current) return;
+
     r.current.currentTime = 0;
     r.current.play().catch(() => {});
   };
 
   function handleImageClick(e) {
     if (locked || roundEnded || !pair) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
+
     const xPct = ((e.clientX - rect.left) / rect.width) * 100;
     const yPct = ((e.clientY - rect.top) / rect.height) * 100;
 
     let hitIndex = -1;
+
     pair.differences.forEach((d, i) => {
       if (found[i]) return;
-      const dist = Math.sqrt((d.x - xPct) ** 2 + (d.y - yPct) ** 2);
-      if (dist <= d.radius) hitIndex = i;
+
+      const dist = Math.sqrt(
+        (d.x - xPct) ** 2 + (d.y - yPct) ** 2
+      );
+
+      if (dist <= d.radius) {
+        hitIndex = i;
+      }
     });
 
     if (hitIndex >= 0) {
       playSound(correctSoundRef);
-      const newFound = { ...found, [hitIndex]: true };
-      setFound(newFound);
-      const newScore = score + POINTS_PER_DIFF;
-      setScore(newScore);
-      set(ref(db, `players/${playerIdRef.current}/score`), newScore);
 
-      if (Object.keys(newFound).length === pair.differences.length) {
-        setRoundEnded(true);
+      const newFound = {
+        ...found,
+        [hitIndex]: true,
+      };
+
+      setFound(newFound);
+
+      const newScore = score + POINTS_PER_DIFF;
+
+      setScore(newScore);
+
+      set(
+        ref(db, `players/${playerIdRef.current}/score`),
+        newScore
+      );
+
+      // إذا وجد اللاعب جميع الاختلافات:
+      // لا ننهي الجولة.
+      // فقط نقفل اللاعب وننتظر انتهاء الوقت وبقية اللاعبين.
+      if (
+        Object.keys(newFound).length ===
+        pair.differences.length
+      ) {
+        setLocked(true);
       }
     } else {
       playSound(wrongSoundRef);
+
       setFlashRed(true);
+
       setTimeout(() => setFlashRed(false), 300);
+
       const newAttempts = attemptsLeft - 1;
+
       setAttemptsLeft(newAttempts);
-      set(ref(db, `players/${playerIdRef.current}/attemptsLeft`), newAttempts);
-      if (newAttempts <= 0) setLocked(true);
+
+      set(
+        ref(db, `players/${playerIdRef.current}/attemptsLeft`),
+        newAttempts
+      );
+
+      if (newAttempts <= 0) {
+        setLocked(true);
+      }
     }
   }
 
-  const playersList = Object.entries(players).map(([id, p]) => ({ id, ...p }));
+  const playersList = Object.entries(players).map(([id, p]) => ({
+    id,
+    ...p,
+  }));
+
   const topSeats = playersList.slice(0, 5);
   const bottomSeats = playersList.slice(5, 10);
-  const sortedLeaderboard = [...playersList].sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  const sortedLeaderboard = [...playersList].sort(
+    (a, b) => (b.score || 0) - (a.score || 0)
+  );
 
   return (
     <main style={styles.page}>
-      <video autoPlay loop muted playsInline style={styles.bgVideo}>
-        <source src="/casino-background.MP4" type="video/mp4" />
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        style={styles.bgVideo}
+      >
+        <source
+          src="/casino-background.MP4"
+          type="video/mp4"
+        />
       </video>
+
       <div style={styles.overlay} />
 
-      {/* أصوات — زود ملفاتك الحقيقية في public/sounds/ */}
-      <audio ref={musicRef} loop src="/sounds/casino-music.mp3" />
-      <audio ref={correctSoundRef} src="/sounds/correct.mp3" />
-      <audio ref={wrongSoundRef} src="/sounds/wrong.mp3" />
+      {/* أصوات */}
+      <audio
+        ref={musicRef}
+        loop
+        src="/sounds/casino-music.mp3"
+      />
 
-      <button style={styles.muteBtn} onClick={() => setMuted((m) => !m)}>
+      <audio
+        ref={correctSoundRef}
+        src="/sounds/correct.mp3"
+      />
+
+      <audio
+        ref={wrongSoundRef}
+        src="/sounds/wrong.mp3"
+      />
+
+      <button
+        style={styles.muteBtn}
+        onClick={() => setMuted((m) => !m)}
+      >
         {muted ? "🔇" : "🔊"}
       </button>
 
-      {joinToast && <div style={styles.joinToast}>{joinToast}</div>}
+      {joinToast && (
+        <div style={styles.joinToast}>
+          {joinToast}
+        </div>
+      )}
 
       {!pairId || !pair ? (
         <div style={styles.center}>
-          <p style={{ color: "#f8d46b", fontSize: 20 }}>
+          <p
+            style={{
+              color: "#f8d46b",
+              fontSize: 20,
+            }}
+          >
             بانتظار قيام المضيف باختيار الصور...
           </p>
         </div>
       ) : (
         <>
           <div style={styles.topBar}>
-            <div style={{ color: "#f8d46b", fontWeight: 900, fontSize: 20 }}>
+            <div
+              style={{
+                color: "#f8d46b",
+                fontWeight: 900,
+                fontSize: 20,
+              }}
+            >
               ⏱ {Math.ceil(remaining)} ثانية
             </div>
+
             <div style={{ color: "white" }}>
-              النقاط: <strong style={{ color: "#f8d46b" }}>{score}</strong>
+              النقاط:{" "}
+              <strong
+                style={{
+                  color: "#f8d46b",
+                }}
+              >
+                {score}
+              </strong>
             </div>
+
             <div style={{ color: "white" }}>
               المحاولات المتبقية:{" "}
-              <strong style={{ color: attemptsLeft > 0 ? "#f8d46b" : "#e04b3f" }}>
+              <strong
+                style={{
+                  color:
+                    attemptsLeft > 0
+                      ? "#f8d46b"
+                      : "#e04b3f",
+                }}
+              >
                 {attemptsLeft}
               </strong>
             </div>
           </div>
 
-          {!roundEnded && <SeatRow seats={topSeats} />}
+          {!roundEnded && (
+            <SeatRow seats={topSeats} />
+          )}
 
           {roundEnded ? (
             showLeaderboard ? (
               <div style={styles.results}>
-                <h2 style={{ color: "#f8d46b" }}>🏆 التصنيف</h2>
+                <h2
+                  style={{
+                    color: "#f8d46b",
+                  }}
+                >
+                  🏆 التصنيف
+                </h2>
+
                 <div style={styles.leaderboardList}>
                   {sortedLeaderboard.map((p, i) => (
-                    <div key={p.id} style={styles.leaderboardRow}>
-                      <span style={styles.leaderboardRank}>#{i + 1}</span>
+                    <div
+                      key={p.id}
+                      style={styles.leaderboardRow}
+                    >
+                      <span
+                        style={
+                          styles.leaderboardRank
+                        }
+                      >
+                        #{i + 1}
+                      </span>
+
                       {p.avatar && (
-                        <img src={p.avatar} alt={p.name} style={styles.leaderboardAvatar} />
+                        <img
+                          src={p.avatar}
+                          alt={p.name}
+                          style={
+                            styles.leaderboardAvatar
+                          }
+                        />
                       )}
-                      <span style={{ flex: 1 }}>{p.name}</span>
-                      <span style={{ color: "#f8d46b" }}>{p.score || 0} نقطة</span>
+
+                      <span style={{ flex: 1 }}>
+                        {p.name}
+                      </span>
+
+                      <span
+                        style={{
+                          color: "#f8d46b",
+                        }}
+                      >
+                        {p.score || 0} نقطة
+                      </span>
                     </div>
                   ))}
                 </div>
-                <p style={{ color: "#999", marginTop: 20 }}>
+
+                <p
+                  style={{
+                    color: "#999",
+                    marginTop: 20,
+                  }}
+                >
                   بانتظار أن يبدأ المضيف الجولة التالية...
                 </p>
               </div>
             ) : (
               <div style={styles.revealFade}>
-                <h3 style={{ textAlign: "center", color: "#f8d46b" }}>
-                  {Object.keys(found).length === pair.differences.length
+                <h3
+                  style={{
+                    textAlign: "center",
+                    color: "#f8d46b",
+                  }}
+                >
+                  {Object.keys(found).length ===
+                  pair.differences.length
                     ? "🎉 لقد عثرت على جميع الاختلافات!"
                     : "⏰ انتهى الوقت!"}
                 </h3>
+
                 <div style={styles.imagesRow}>
-                  {[pair.image1, pair.image2].map((src, idx) => (
-                    <div key={idx} style={styles.imgWrapOuter}>
-                      <div style={styles.imgWrap}>
-                        <img src={src} alt="" style={styles.img} draggable={false} />
-                        {pair.differences.map((d, i) => (
-                          <div
-                            key={i}
-                            style={{
-                              ...styles.foundMarker,
-                              left: `${d.x}%`,
-                              top: `${d.y}%`,
-                              width: `${d.radius * 2}%`,
-                              height: `${d.radius * 2}%`,
-                              borderColor: found[i] ? "#00ff88" : "#ffcf00",
-                            }}
+                  {[pair.image1, pair.image2].map(
+                    (src, idx) => (
+                      <div
+                        key={idx}
+                        style={
+                          styles.imgWrapOuter
+                        }
+                      >
+                        <div
+                          style={styles.imgWrap}
+                        >
+                          <img
+                            src={src}
+                            alt=""
+                            style={styles.img}
+                            draggable={false}
                           />
-                        ))}
+
+                          {pair.differences.map(
+                            (d, i) => (
+                              <div
+                                key={i}
+                                style={{
+                                  ...styles.foundMarker,
+                                  left: `${d.x}%`,
+                                  top: `${d.y}%`,
+                                  width: `${
+                                    d.radius * 2
+                                  }%`,
+                                  height: `${
+                                    d.radius * 2
+                                  }%`,
+                                  borderColor:
+                                    found[i]
+                                      ? "#00ff88"
+                                      : "#ffcf00",
+                                }}
+                              />
+                            )
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
               </div>
             )
@@ -264,7 +467,9 @@ export default function GamePage() {
             <div
               style={{
                 ...styles.imagesRow,
-                filter: flashRed ? "brightness(1.5) saturate(2)" : "none",
+                filter: flashRed
+                  ? "brightness(1.5) saturate(2)"
+                  : "none",
               }}
             >
               <ImageBox
@@ -273,31 +478,51 @@ export default function GamePage() {
                 found={found}
                 differences={pair.differences}
                 locked={locked}
-                onZoom={() => setZoomSrc(pair.image1)}
+                onZoom={() =>
+                  setZoomSrc(pair.image1)
+                }
               />
+
               <ImageBox
                 src={pair.image2}
                 onClick={handleImageClick}
                 found={found}
                 differences={pair.differences}
                 locked={locked}
-                onZoom={() => setZoomSrc(pair.image2)}
+                onZoom={() =>
+                  setZoomSrc(pair.image2)
+                }
               />
             </div>
           )}
 
-          {!roundEnded && <SeatRow seats={bottomSeats} />}
+          {!roundEnded && (
+            <SeatRow seats={bottomSeats} />
+          )}
 
           {locked && !roundEnded && (
-            <div style={styles.lockedBanner}>🔒 خلصت محاولاتك، استنى نهاية الجولة</div>
+            <div style={styles.lockedBanner}>
+              🔒 خلصت محاولاتك، استنى نهاية الجولة
+            </div>
           )}
         </>
       )}
 
       {zoomSrc && (
-        <div style={styles.zoomOverlay} onClick={() => setZoomSrc(null)}>
-          <img src={zoomSrc} alt="zoom" style={styles.zoomImg} />
-          <button style={styles.zoomClose} onClick={() => setZoomSrc(null)}>
+        <div
+          style={styles.zoomOverlay}
+          onClick={() => setZoomSrc(null)}
+        >
+          <img
+            src={zoomSrc}
+            alt="zoom"
+            style={styles.zoomImg}
+          />
+
+          <button
+            style={styles.zoomClose}
+            onClick={() => setZoomSrc(null)}
+          >
             ✕
           </button>
         </div>
@@ -306,19 +531,42 @@ export default function GamePage() {
   );
 }
 
-function ImageBox({ src, onClick, found, differences, locked, onZoom }) {
+function ImageBox({
+  src,
+  onClick,
+  found,
+  differences,
+  locked,
+  onZoom,
+}) {
   return (
     <div style={styles.imgWrapOuter}>
-      <button style={styles.zoomBtn} onClick={onZoom}>
+      <button
+        style={styles.zoomBtn}
+        onClick={onZoom}
+      >
         🔍
       </button>
+
       <div
-        style={{ ...styles.imgWrap, cursor: locked ? "not-allowed" : "crosshair" }}
+        style={{
+          ...styles.imgWrap,
+          cursor: locked
+            ? "not-allowed"
+            : "crosshair",
+        }}
         onClick={onClick}
       >
-        <img src={src} alt="" style={styles.img} draggable={false} />
+        <img
+          src={src}
+          alt=""
+          style={styles.img}
+          draggable={false}
+        />
+
         {Object.keys(found).map((i) => {
           const d = differences[i];
+
           return (
             <div
               key={i}
@@ -339,22 +587,49 @@ function ImageBox({ src, onClick, found, differences, locked, onZoom }) {
 
 function SeatRow({ seats }) {
   if (seats.length === 0) return null;
+
   return (
     <div style={styles.seatRow}>
       {seats.map((p) => (
-        <div key={p.id} style={styles.seat}>
-          <div style={styles.seatAvatarWrap}>
-            {p.avatar && <img src={p.avatar} alt={p.name} style={styles.seatAvatar} />}
+        <div
+          key={p.id}
+          style={styles.seat}
+        >
+          <div
+            style={styles.seatAvatarWrap}
+          >
+            {p.avatar && (
+              <img
+                src={p.avatar}
+                alt={p.name}
+                style={styles.seatAvatar}
+              />
+            )}
+
             <span
               style={{
                 ...styles.statusDot,
-                background: p.attemptsLeft > 0 ? "#00ff88" : "#e04b3f",
+                background:
+                  p.attemptsLeft > 0
+                    ? "#00ff88"
+                    : "#e04b3f",
               }}
             />
           </div>
-          <span style={styles.seatName}>{p.name}</span>
-          <span style={styles.seatScore}>{p.score || 0} نقطة</span>
-          <span style={styles.seatAttempts}>محاولات: {p.attemptsLeft ?? ATTEMPTS_START}</span>
+
+          <span style={styles.seatName}>
+            {p.name}
+          </span>
+
+          <span style={styles.seatScore}>
+            {p.score || 0} نقطة
+          </span>
+
+          <span style={styles.seatAttempts}>
+            محاولات:{" "}
+            {p.attemptsLeft ??
+              ATTEMPTS_START}
+          </span>
         </div>
       ))}
     </div>
@@ -370,6 +645,7 @@ const styles = {
     padding: 20,
     overflow: "hidden",
   },
+
   bgVideo: {
     position: "fixed",
     inset: 0,
@@ -378,12 +654,14 @@ const styles = {
     objectFit: "cover",
     zIndex: -2,
   },
+
   overlay: {
     position: "fixed",
     inset: 0,
     background: "rgba(3,3,2,0.78)",
     zIndex: -1,
   },
+
   muteBtn: {
     position: "fixed",
     top: 16,
@@ -398,6 +676,7 @@ const styles = {
     color: "#fff",
     cursor: "pointer",
   },
+
   joinToast: {
     position: "fixed",
     top: 20,
@@ -410,12 +689,14 @@ const styles = {
     borderRadius: 20,
     animation: "none",
   },
+
   center: {
     minHeight: "80vh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
+
   topBar: {
     display: "flex",
     justifyContent: "space-around",
@@ -425,6 +706,7 @@ const styles = {
     marginBottom: 12,
     border: "1px solid rgba(232,184,74,0.3)",
   },
+
   seatRow: {
     display: "flex",
     justifyContent: "center",
@@ -432,6 +714,7 @@ const styles = {
     flexWrap: "wrap",
     margin: "10px 0",
   },
+
   seat: {
     display: "flex",
     flexDirection: "column",
@@ -441,7 +724,11 @@ const styles = {
     padding: "6px 10px",
     minWidth: 76,
   },
-  seatAvatarWrap: { position: "relative" },
+
+  seatAvatarWrap: {
+    position: "relative",
+  },
+
   seatAvatar: {
     width: 40,
     height: 40,
@@ -449,6 +736,7 @@ const styles = {
     objectFit: "cover",
     border: "2px solid #f8d46b",
   },
+
   statusDot: {
     position: "absolute",
     bottom: 0,
@@ -458,9 +746,22 @@ const styles = {
     borderRadius: "50%",
     border: "2px solid #111",
   },
-  seatName: { fontSize: 11, marginTop: 4 },
-  seatScore: { fontSize: 10, color: "#f8d46b" },
-  seatAttempts: { fontSize: 9, color: "#aaa" },
+
+  seatName: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+
+  seatScore: {
+    fontSize: 10,
+    color: "#f8d46b",
+  },
+
+  seatAttempts: {
+    fontSize: 9,
+    color: "#aaa",
+  },
+
   imagesRow: {
     display: "flex",
     gap: 15,
@@ -468,7 +769,14 @@ const styles = {
     justifyContent: "center",
     transition: "filter 0.2s",
   },
-  imgWrapOuter: { position: "relative", flex: 1, minWidth: 300, maxWidth: 600 },
+
+  imgWrapOuter: {
+    position: "relative",
+    flex: 1,
+    minWidth: 300,
+    maxWidth: 600,
+  },
+
   zoomBtn: {
     position: "absolute",
     top: 8,
@@ -481,23 +789,45 @@ const styles = {
     padding: "4px 10px",
     cursor: "pointer",
   },
+
   imgWrap: {
     position: "relative",
     border: "2px solid #333",
     borderRadius: 12,
     overflow: "hidden",
   },
-  img: { width: "100%", display: "block", userSelect: "none" },
+
+  img: {
+    width: "100%",
+    display: "block",
+    userSelect: "none",
+  },
+
   foundMarker: {
     position: "absolute",
     transform: "translate(-50%, -50%)",
     border: "3px solid #00ff88",
     borderRadius: "50%",
-    boxShadow: "0 0 15px rgba(0,255,136,0.6)",
+    boxShadow:
+      "0 0 15px rgba(0,255,136,0.6)",
   },
-  lockedBanner: { textAlign: "center", marginTop: 16, fontSize: 18, color: "#e04b3f" },
-  revealFade: { animation: "none" },
-  results: { textAlign: "center", padding: 40 },
+
+  lockedBanner: {
+    textAlign: "center",
+    marginTop: 16,
+    fontSize: 18,
+    color: "#e04b3f",
+  },
+
+  revealFade: {
+    animation: "none",
+  },
+
+  results: {
+    textAlign: "center",
+    padding: 40,
+  },
+
   leaderboardList: {
     display: "flex",
     flexDirection: "column",
@@ -505,6 +835,7 @@ const styles = {
     width: "min(90%, 420px)",
     margin: "16px auto 0",
   },
+
   leaderboardRow: {
     display: "flex",
     alignItems: "center",
@@ -513,8 +844,20 @@ const styles = {
     padding: "8px 14px",
     borderRadius: 12,
   },
-  leaderboardRank: { width: 30, fontWeight: "bold", color: "#f8d46b" },
-  leaderboardAvatar: { width: 32, height: 32, borderRadius: "50%", objectFit: "cover" },
+
+  leaderboardRank: {
+    width: 30,
+    fontWeight: "bold",
+    color: "#f8d46b",
+  },
+
+  leaderboardAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    objectFit: "cover",
+  },
+
   zoomOverlay: {
     position: "fixed",
     inset: 0,
@@ -525,7 +868,13 @@ const styles = {
     justifyContent: "center",
     padding: 20,
   },
-  zoomImg: { maxWidth: "95%", maxHeight: "95%", borderRadius: 12 },
+
+  zoomImg: {
+    maxWidth: "95%",
+    maxHeight: "95%",
+    borderRadius: 12,
+  },
+
   zoomClose: {
     position: "absolute",
     top: 20,
