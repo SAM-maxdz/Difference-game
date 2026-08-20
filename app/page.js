@@ -26,100 +26,73 @@ export default function Home() {
   const router = useRouter();
 
   const [name, setName] = useState("");
-  const [avatar, setAvatar] =
-    useState(avatars[0]);
+  const [avatar, setAvatar] = useState(avatars[0]);
+  const [joined, setJoined] = useState(false);
+  const [players, setPlayers] = useState({});
+  const [gameStatus, setGameStatus] = useState("waiting");
 
-  const [joined, setJoined] =
-    useState(false);
+  const playerIdRef = useRef(null);
 
-  const [players, setPlayers] =
-    useState({});
-
-  const [gameStatus, setGameStatus] =
-    useState("waiting");
-
-  const playerIdRef =
-    useRef(null);
-
-  // =========================================================
   // إنشاء ID ثابت للاعب
-  // =========================================================
-
   useEffect(() => {
-    let id =
-      sessionStorage.getItem(
-        "playerId"
-      );
+    let id = sessionStorage.getItem("playerId");
 
     if (!id) {
       id = crypto.randomUUID();
-
-      sessionStorage.setItem(
-        "playerId",
-        id
-      );
+      sessionStorage.setItem("playerId", id);
     }
 
     playerIdRef.current = id;
   }, []);
 
-  // =========================================================
-  // مراقبة اللاعبين
-  // =========================================================
-
+  // مراقبة اللاعبين الموجودين
   useEffect(() => {
-    const playersRef =
-      ref(db, "players");
+    const playersRef = ref(db, "players");
 
-    const unsubscribe =
-      onValue(
-        playersRef,
-        (snapshot) => {
-          setPlayers(
-            snapshot.val() || {}
-          );
-        }
-      );
+    const unsubscribe = onValue(
+      playersRef,
+      (snapshot) => {
+        setPlayers(snapshot.val() || {});
+      }
+    );
 
-    return () =>
-      unsubscribe();
+    return () => unsubscribe();
   }, []);
 
-  // =========================================================
   // مراقبة حالة اللعبة
-  // =========================================================
-
   useEffect(() => {
-    const statusRef =
-      ref(db, "game/status");
+    const statusRef = ref(db, "game/status");
 
-    const unsubscribe =
-      onValue(
-        statusRef,
-        (snapshot) => {
-          setGameStatus(
-            snapshot.val() ||
-              "waiting"
-          );
-        }
-      );
+    const unsubscribe = onValue(
+      statusRef,
+      (snapshot) => {
+        setGameStatus(
+          snapshot.val() || "waiting"
+        );
+      }
+    );
 
-    return () =>
-      unsubscribe();
+    return () => unsubscribe();
   }, []);
 
-  // =========================================================
+  // =====================================================
   // الانتقال إلى اللعبة
-  // =========================================================
-
+  // =====================================================
+  //
+  // مهم:
+  // عندما يضغط المضيف Start تصبح الحالة countdown
+  // لذلك ننتقل إلى /game فورًا.
+  //
+  // GamePage هو الذي سيعرض:
+  // 5 → 4 → 3 → 2 → 1
+  // ثم الصور.
+  //
   useEffect(() => {
     if (
       joined &&
       (
-        gameStatus ===
-          "playing" ||
-        gameStatus ===
-          "countdown"
+        gameStatus === "countdown" ||
+        gameStatus === "playing"
       )
     ) {
       router.push("/game");
@@ -130,49 +103,34 @@ export default function Home() {
     router,
   ]);
 
-  // =========================================================
   // دخول اللاعب
-  // =========================================================
-
   function handleJoin() {
-    const id =
-      playerIdRef.current;
+    const id = playerIdRef.current;
 
-    if (
-      !id ||
-      !name.trim()
-    ) {
+    if (!id || !name.trim()) {
       return;
     }
 
-    const playerRef =
-      ref(
-        db,
-        `players/${id}`
-      );
+    const playerRef = ref(
+      db,
+      `players/${id}`
+    );
 
     set(playerRef, {
-      name:
-        name.trim(),
+      name: name.trim(),
       avatar,
-      joinedAt:
-        Date.now(),
+      joinedAt: Date.now(),
     });
 
-    onDisconnect(
-      playerRef
-    ).remove();
+    // حذف اللاعب تلقائيًا عند انقطاع الاتصال
+    onDisconnect(playerRef).remove();
 
     setJoined(true);
   }
 
-  // =========================================================
-  // تغيير الاسم أو الافتار
-  // =========================================================
-
+  // تغيير الاسم أو الصورة
   function handleChangeInfo() {
-    const id =
-      playerIdRef.current;
+    const id = playerIdRef.current;
 
     if (id) {
       remove(
@@ -187,13 +145,11 @@ export default function Home() {
   }
 
   const playersList =
-    Object.entries(
-      players
-    );
+    Object.entries(players);
 
-  // =========================================================
+  // =====================================================
   // WAITING LOBBY
-  // =========================================================
+  // =====================================================
 
   if (joined) {
     return (
@@ -232,18 +188,14 @@ export default function Home() {
               >
                 <div className="seat-avatar">
                   <img
-                    src={
-                      player.avatar
-                    }
+                    src={player.avatar}
                     alt="avatar"
                   />
                 </div>
 
                 <div>
                   <strong>
-                    {
-                      player.name
-                    }
+                    {player.name}
                   </strong>
 
                   <span>
@@ -269,14 +221,15 @@ export default function Home() {
           >
             CHANGE NAME / AVATAR
           </button>
+
         </section>
       </main>
     );
   }
 
-  // =========================================================
+  // =====================================================
   // JOIN SCREEN
-  // =========================================================
+  // =====================================================
 
   return (
     <main className="casino">
@@ -330,6 +283,7 @@ export default function Home() {
           </div>
 
           <div className="avatars">
+
             {avatars.map(
               (item) => (
                 <button
@@ -340,9 +294,7 @@ export default function Home() {
                       : ""
                   }`}
                   onClick={() =>
-                    setAvatar(
-                      item
-                    )
+                    setAvatar(item)
                   }
                 >
                   <img
@@ -352,13 +304,16 @@ export default function Home() {
                 </button>
               )
             )}
+
           </div>
 
           <div className="selected-avatar">
+
             <img
               src={avatar}
               alt="selected avatar"
             />
+
           </div>
 
           <button
@@ -384,6 +339,7 @@ export default function Home() {
         </div>
 
       </section>
+
     </main>
   );
 }
