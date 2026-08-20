@@ -12,6 +12,8 @@ export default function HostPage() {
 
   const [players, setPlayers] = useState({});
   const [status, setStatus] = useState("waiting");
+  const [imagePairs, setImagePairs] = useState({});
+  const [selectedPairId, setSelectedPairId] = useState("");
 
   useEffect(() => {
     const saved = sessionStorage.getItem("hostAuthorized");
@@ -42,6 +44,15 @@ export default function HostPage() {
     return () => unsubscribe();
   }, [authorized]);
 
+  useEffect(() => {
+    if (!authorized) return;
+    const pairsRef = ref(db, "imagePairs");
+    const unsubscribe = onValue(pairsRef, (snapshot) => {
+      setImagePairs(snapshot.val() || {});
+    });
+    return () => unsubscribe();
+  }, [authorized]);
+
   function handleLogin() {
     if (passwordInput === HOST_PASSWORD) {
       setAuthorized(true);
@@ -53,6 +64,12 @@ export default function HostPage() {
   }
 
   function startGame() {
+    if (!selectedPairId) {
+      alert("اختار زوج صور أول");
+      return;
+    }
+    set(ref(db, "game/currentPairId"), selectedPairId);
+    set(ref(db, "game/startedAt"), Date.now());
     set(ref(db, "game/status"), "playing");
   }
 
@@ -112,6 +129,7 @@ export default function HostPage() {
   }
 
   const playersList = Object.entries(players);
+  const pairsList = Object.entries(imagePairs);
 
   return (
     <main
@@ -133,7 +151,49 @@ export default function HostPage() {
           <li key={id}>{p.name}</li>
         ))}
       </ul>
-      <div style={{ display: "flex", gap: 15, marginTop: 20 }}>
+
+      <h2 style={{ color: "#f8d46b", marginTop: 30 }}>اختر زوج الصور</h2>
+      {pairsList.length === 0 ? (
+        <p style={{ color: "#999" }}>
+          ماكاين حتى زوج صور محفوظ. روح لصفحة /admin/differences وأضف زوج
+          أول.
+        </p>
+      ) : (
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 500 }}
+        >
+          {pairsList.map(([id, pair]) => (
+            <label
+              key={id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: 12,
+                borderRadius: 10,
+                border:
+                  selectedPairId === id
+                    ? "2px solid #f8d46b"
+                    : "1px solid #333",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="radio"
+                name="pair"
+                checked={selectedPairId === id}
+                onChange={() => setSelectedPairId(id)}
+              />
+              <span>
+                المستوى {pair.level} ({pair.name}) — {pair.differences?.length || 0}{" "}
+                اختلافات — {pair.timeLimit} ثانية
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 15, marginTop: 25 }}>
         <button
           onClick={startGame}
           disabled={status === "playing"}
