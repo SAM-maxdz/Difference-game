@@ -117,7 +117,7 @@ export default function GamePage() {
     return (
       <main style={styles.center}>
         <p style={{ color: "#f8d46b", fontSize: 20 }}>
-          في انتظار المضيف يختار الصور...
+          بانتظار قيام المضيف باختيار الصور...
         </p>
       </main>
     );
@@ -129,13 +129,13 @@ export default function GamePage() {
     <main style={styles.page}>
       <div style={styles.topBar}>
         <div style={{ color: "#f8d46b", fontWeight: 900, fontSize: 20 }}>
-          ⏱ {Math.ceil(remaining)}s
+          ⏱ {Math.ceil(remaining)} ثانية
         </div>
         <div style={{ color: "white" }}>
           النقاط: <strong style={{ color: "#f8d46b" }}>{score}</strong>
         </div>
         <div style={{ color: "white" }}>
-          المحاولات:{" "}
+          المحاولات المتبقية:{" "}
           <strong style={{ color: attemptsLeft > 0 ? "#f8d46b" : "#e04b3f" }}>
             {attemptsLeft}
           </strong>
@@ -146,8 +146,8 @@ export default function GamePage() {
         <div style={styles.results}>
           <h2 style={{ color: "#f8d46b" }}>
             {Object.keys(found).length === pair.differences.length
-              ? "🎉 لقيت كل الاختلافات!"
-              : "⏰ خلص الوقت!"}
+              ? "🎉 لقد عثرت على جميع الاختلافات!"
+              : "⏰ انتهى الوقت!"}
           </h2>
           <p>نقاطك: {score}</p>
           <h3 style={{ color: "#f8d46b", marginTop: 20 }}>الترتيب</h3>
@@ -161,7 +161,7 @@ export default function GamePage() {
               ))}
           </ul>
           <p style={{ color: "#999", marginTop: 20 }}>
-            في انتظار المضيف يبدا الجولة الجاية...
+            بانتظار أن يبدأ المضيف الجولة التالية...
           </p>
         </div>
       ) : (
