@@ -7,138 +7,220 @@ import { ref, onValue, set } from "firebase/database";
 const ATTEMPTS_START = 5;
 const POINTS_PER_DIFF = 50;
 const REVEAL_BEFORE_LEADERBOARD = 10;
+const COUNTDOWN_SECONDS = 5;
 
 export default function GamePage() {
   const [pairId, setPairId] = useState(null);
   const [pair, setPair] = useState(null);
-  const [startedAt, setStartedAt] = useState(null);
-  const [remaining, setRemaining] = useState(0);
 
-  const [countdown, setCountdown] = useState(null);
+  const [startedAt, setStartedAt] =
+    useState(null);
 
-  const [found, setFound] = useState({});
-  const [attemptsLeft, setAttemptsLeft] =
-    useState(ATTEMPTS_START);
-  const [score, setScore] = useState(0);
+  const [
+    countdownStartedAt,
+    setCountdownStartedAt,
+  ] = useState(null);
 
-  const [flashRed, setFlashRed] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const [roundEnded, setRoundEnded] = useState(false);
+  const [gameStatus, setGameStatus] =
+    useState("waiting");
 
-  const [players, setPlayers] = useState({});
-  const [showLeaderboard, setShowLeaderboard] =
+  const [remaining, setRemaining] =
+    useState(0);
+
+  const [countdown, setCountdown] =
+    useState(null);
+
+  const [found, setFound] =
+    useState({});
+
+  const [
+    attemptsLeft,
+    setAttemptsLeft,
+  ] = useState(ATTEMPTS_START);
+
+  const [score, setScore] =
+    useState(0);
+
+  const [flashRed, setFlashRed] =
     useState(false);
 
-  const [muted, setMuted] = useState(false);
-  const [zoomSrc, setZoomSrc] = useState(null);
-  const [joinToast, setJoinToast] = useState(null);
+  const [locked, setLocked] =
+    useState(false);
 
-  const playerIdRef = useRef(null);
-  const knownPlayerIds = useRef(new Set());
+  const [roundEnded, setRoundEnded] =
+    useState(false);
 
-  const musicRef = useRef(null);
-  const correctSoundRef = useRef(null);
-  const wrongSoundRef = useRef(null);
+  const [players, setPlayers] =
+    useState({});
 
-  // ---------- رقم اللاعب ----------
+  const [
+    showLeaderboard,
+    setShowLeaderboard,
+  ] = useState(false);
+
+  const [muted, setMuted] =
+    useState(false);
+
+  const [zoomSrc, setZoomSrc] =
+    useState(null);
+
+  const [joinToast, setJoinToast] =
+    useState(null);
+
+  const playerIdRef =
+    useRef(null);
+
+  const knownPlayerIds =
+    useRef(new Set());
+
+  const musicRef =
+    useRef(null);
+
+  const correctSoundRef =
+    useRef(null);
+
+  const wrongSoundRef =
+    useRef(null);
+
+  // =========================================================
+  // رقم اللاعب
+  // =========================================================
+
   useEffect(() => {
     playerIdRef.current =
-      sessionStorage.getItem("playerId");
+      sessionStorage.getItem(
+        "playerId"
+      );
   }, []);
 
-  // ---------- حالة اللعبة ----------
+  // =========================================================
+  // حالة اللعبة
+  // =========================================================
+
   useEffect(() => {
-    const gameRef = ref(db, "game");
+    const gameRef =
+      ref(db, "game");
 
-    const unsubscribe = onValue(
-      gameRef,
-      (snapshot) => {
-        const data = snapshot.val() || {};
+    const unsubscribe =
+      onValue(
+        gameRef,
+        (snapshot) => {
+          const data =
+            snapshot.val() || {};
 
-        setPairId(
-          data.currentPairId || null
-        );
+          setPairId(
+            data.currentPairId ||
+              null
+          );
 
-        setStartedAt(
-          data.startedAt || null
-        );
-      }
-    );
+          setStartedAt(
+            data.startedAt ||
+              null
+          );
 
-    return () => unsubscribe();
-  }, []);
+          setCountdownStartedAt(
+            data.countdownStartedAt ||
+              null
+          );
 
-  // ---------- العد التنازلي ----------
-  useEffect(() => {
-    const gameRef = ref(db, "game");
-
-    const unsubscribe = onValue(
-      gameRef,
-      (snapshot) => {
-        const data = snapshot.val() || {};
-
-        if (
-          data.status !== "countdown" ||
-          !data.countdownStartedAt
-        ) {
-          setCountdown(null);
-          return;
+          setGameStatus(
+            data.status ||
+              "waiting"
+          );
         }
+      );
 
-        const countdownStartedAt =
-          data.countdownStartedAt;
-
-        const updateCountdown = () => {
-          const elapsed =
-            (Date.now() -
-              countdownStartedAt) /
-            1000;
-
-          const value =
-            5 - Math.floor(elapsed);
-
-          if (value > 0) {
-            setCountdown(value);
-          } else {
-            setCountdown(null);
-          }
-        };
-
-        updateCountdown();
-
-        const interval = setInterval(
-          updateCountdown,
-          100
-        );
-
-        return () =>
-          clearInterval(interval);
-      }
-    );
-
-    return () => unsubscribe();
+    return () =>
+      unsubscribe();
   }, []);
 
-  // ---------- بيانات الصور ----------
+  // =========================================================
+  // العد التنازلي 5 -> 4 -> 3 -> 2 -> 1
+  // =========================================================
+
   useEffect(() => {
-    if (!pairId) return;
+    if (
+      gameStatus !==
+        "countdown" ||
+      !countdownStartedAt
+    ) {
+      setCountdown(null);
+      return;
+    }
 
-    const pairRef = ref(
-      db,
-      `imagePairs/${pairId}`
-    );
+    const updateCountdown =
+      () => {
+        const elapsed =
+          (Date.now() -
+            countdownStartedAt) /
+          1000;
 
-    const unsubscribe = onValue(
-      pairRef,
-      (snapshot) => {
-        setPair(snapshot.val());
-      }
-    );
+        const value =
+          COUNTDOWN_SECONDS -
+          Math.floor(elapsed);
 
-    return () => unsubscribe();
+        if (value > 0) {
+          setCountdown(
+            value
+          );
+        } else {
+          setCountdown(
+            null
+          );
+        }
+      };
+
+    updateCountdown();
+
+    const interval =
+      setInterval(
+        updateCountdown,
+        100
+      );
+
+    return () =>
+      clearInterval(
+        interval
+      );
+  }, [
+    gameStatus,
+    countdownStartedAt,
+  ]);
+
+  // =========================================================
+  // بيانات الصور
+  // =========================================================
+
+  useEffect(() => {
+    if (!pairId) {
+      setPair(null);
+      return;
+    }
+
+    const pairRef =
+      ref(
+        db,
+        `imagePairs/${pairId}`
+      );
+
+    const unsubscribe =
+      onValue(
+        pairRef,
+        (snapshot) => {
+          setPair(
+            snapshot.val()
+          );
+        }
+      );
+
+    return () =>
+      unsubscribe();
   }, [pairId]);
 
-  // ---------- تصفير الجولة الجديدة ----------
+  // =========================================================
+  // تصفير الجولة الجديدة
+  // =========================================================
+
   useEffect(() => {
     if (
       !pairId ||
@@ -163,14 +245,18 @@ export default function GamePage() {
       );
 
       setFound({});
+
       setAttemptsLeft(
         ATTEMPTS_START
       );
+
       setScore(0);
+
       setLocked(false);
+
       setRoundEnded(false);
+
       setShowLeaderboard(false);
-      setRemaining(0);
 
       set(
         ref(
@@ -188,60 +274,87 @@ export default function GamePage() {
         ATTEMPTS_START
       );
     }
-  }, [pairId, startedAt]);
+  }, [
+    pairId,
+    startedAt,
+  ]);
 
   // =========================================================
-  // ---------- عداد وقت اللعب ----------
-  // =========================================================
-  //
-  // مهم:
-  // المضيف يبدأ العد التنازلي 5 ثواني قبل اللعب.
-  // لذلك لا نبدأ حساب وقت اللعبة من startedAt مباشرة.
-  //
-  // نضيف 5 ثواني إلى startedAt.
-  // بهذا:
-  //
-  // ضغط المضيف
-  //       ↓
-  // 5 - 4 - 3 - 2 - 1
-  //       ↓
-  // يبدأ وقت اللعبة الحقيقي
-  //
+  // عداد وقت اللعبة
   // =========================================================
 
   useEffect(() => {
-    if (
-      !pair ||
-      !startedAt
-    ) {
+    if (!pair) {
       return;
     }
 
-    // وقت بداية اللعب الحقيقي بعد انتهاء العد التنازلي
-    const actualGameStart =
-      startedAt + 5000;
+    /*
+      وقت البداية الحقيقي:
 
-    const updateTimer = () => {
-      const elapsed =
-        (Date.now() -
-          actualGameStart) /
-        1000;
+      إذا بدأ العد التنازلي،
+      فبداية اللعبة الحقيقية =
+      countdownStartedAt + 5 ثواني.
 
-      const rem =
-        Math.max(
-          0,
-          pair.timeLimit -
-            elapsed
+      وهذا يمنع ظهور 0 أثناء
+      العد التنازلي.
+    */
+
+    let realStartTime =
+      startedAt;
+
+    if (
+      !realStartTime &&
+      countdownStartedAt
+    ) {
+      realStartTime =
+        countdownStartedAt +
+        COUNTDOWN_SECONDS *
+          1000;
+    }
+
+    if (!realStartTime) {
+      setRemaining(
+        0
+      );
+      return;
+    }
+
+    const updateTimer =
+      () => {
+        const elapsed =
+          (Date.now() -
+            realStartTime) /
+          1000;
+
+        /*
+          أثناء العد التنازلي:
+          لا نسمح للعداد بالنزول.
+
+          إذا كانت مدة اللعبة 60:
+          يبقى 60 أثناء العد.
+        */
+
+        const rem =
+          Math.max(
+            0,
+            pair.timeLimit -
+              Math.max(
+                0,
+                elapsed
+              )
+          );
+
+        setRemaining(
+          rem
         );
 
-      setRemaining(rem);
+        if (rem <= 0) {
+          setRoundEnded(
+            true
+          );
+        }
+      };
 
-      if (rem <= 0) {
-        setRoundEnded(true);
-      }
-    };
-
-    // تحديث مباشر
     updateTimer();
 
     const interval =
@@ -251,74 +364,101 @@ export default function GamePage() {
       );
 
     return () =>
-      clearInterval(interval);
-  }, [pair, startedAt]);
+      clearInterval(
+        interval
+      );
+  }, [
+    pair,
+    startedAt,
+    countdownStartedAt,
+  ]);
 
-  // ---------- بعد نهاية الجولة ----------
+  // =========================================================
+  // بعد نهاية الجولة
+  // =========================================================
+
   useEffect(() => {
-    if (!roundEnded) return;
+    if (!roundEnded) {
+      return;
+    }
 
-    const t = setTimeout(
-      () =>
-        setShowLeaderboard(
-          true
-        ),
-      REVEAL_BEFORE_LEADERBOARD *
-        1000
-    );
+    const t =
+      setTimeout(
+        () =>
+          setShowLeaderboard(
+            true
+          ),
+        REVEAL_BEFORE_LEADERBOARD *
+          1000
+      );
 
     return () =>
       clearTimeout(t);
   }, [roundEnded]);
 
-  // ---------- اللاعبين ----------
+  // =========================================================
+  // اللاعبين
+  // =========================================================
+
   useEffect(() => {
     const playersRef =
       ref(db, "players");
 
-    const unsubscribe = onValue(
-      playersRef,
-      (snapshot) => {
-        const data =
-          snapshot.val() || {};
+    const unsubscribe =
+      onValue(
+        playersRef,
+        (snapshot) => {
+          const data =
+            snapshot.val() || {};
 
-        Object.entries(data).forEach(
-          ([id, p]) => {
-            if (
-              !knownPlayerIds.current.has(
+          Object.entries(
+            data
+          ).forEach(
+            ([id, p]) => {
+              if (
+                !knownPlayerIds.current.has(
+                  id
+                ) &&
+                knownPlayerIds.current
+                  .size > 0
+              ) {
+                setJoinToast(
+                  `🎉 ${p.name} انضم للعبة`
+                );
+
+                setTimeout(
+                  () =>
+                    setJoinToast(
+                      null
+                    ),
+                  3000
+                );
+              }
+
+              knownPlayerIds.current.add(
                 id
-              ) &&
-              knownPlayerIds.current
-                .size > 0
-            ) {
-              setJoinToast(
-                `🎉 ${p.name} انضم للعبة`
-              );
-
-              setTimeout(
-                () =>
-                  setJoinToast(null),
-                3000
               );
             }
+          );
 
-            knownPlayerIds.current.add(
-              id
-            );
-          }
-        );
-
-        setPlayers(data);
-      }
-    );
+          setPlayers(
+            data
+          );
+        }
+      );
 
     return () =>
       unsubscribe();
   }, []);
 
-  // ---------- الموسيقى ----------
+  // =========================================================
+  // الموسيقى
+  // =========================================================
+
   useEffect(() => {
-    if (!musicRef.current) return;
+    if (!musicRef.current) {
+      return;
+    }
 
     musicRef.current.volume =
       0.25;
@@ -330,10 +470,18 @@ export default function GamePage() {
         .play()
         .catch(() => {});
     }
-  }, [muted, pairId]);
+  }, [
+    muted,
+    pairId,
+  ]);
 
-  // ---------- الأصوات ----------
-  const playSound = (audioRef) => {
+  // =========================================================
+  // الأصوات
+  // =========================================================
+
+  const playSound = (
+    audioRef
+  ) => {
     if (
       muted ||
       !audioRef.current
@@ -349,12 +497,17 @@ export default function GamePage() {
       .catch(() => {});
   };
 
-  // ---------- الضغط على الصورة ----------
+  // =========================================================
+  // الضغط على الصورة
+  // =========================================================
+
   function handleImageClick(e) {
     if (
       locked ||
       roundEnded ||
       countdown !== null ||
+      gameStatus !==
+        "playing" ||
       !pair
     ) {
       return;
@@ -379,7 +532,9 @@ export default function GamePage() {
 
     pair.differences.forEach(
       (d, i) => {
-        if (found[i]) return;
+        if (found[i]) {
+          return;
+        }
 
         const dist =
           Math.sqrt(
@@ -388,14 +543,18 @@ export default function GamePage() {
           );
 
         if (
-          dist <= d.radius
+          dist <=
+          d.radius
         ) {
           hitIndex = i;
         }
       }
     );
 
-    // ---------- اختلاف صحيح ----------
+    // =======================================================
+    // اختلاف صحيح
+    // =======================================================
+
     if (hitIndex >= 0) {
       playSound(
         correctSoundRef
@@ -406,13 +565,17 @@ export default function GamePage() {
         [hitIndex]: true,
       };
 
-      setFound(newFound);
+      setFound(
+        newFound
+      );
 
       const newScore =
         score +
         POINTS_PER_DIFF;
 
-      setScore(newScore);
+      setScore(
+        newScore
+      );
 
       set(
         ref(
@@ -427,27 +590,39 @@ export default function GamePage() {
         Object.keys(
           newFound
         ).length ===
-        pair.differences.length
+        pair.differences
+          .length
       ) {
-        setLocked(true);
+        setLocked(
+          true
+        );
       }
     }
 
-    // ---------- ضغط خاطئ ----------
+    // =======================================================
+    // ضغط خاطئ
+    // =======================================================
+
     else {
       playSound(
         wrongSoundRef
       );
 
-      setFlashRed(true);
+      setFlashRed(
+        true
+      );
 
       setTimeout(
-        () => setFlashRed(false),
+        () =>
+          setFlashRed(
+            false
+          ),
         300
       );
 
       const newAttempts =
-        attemptsLeft - 1;
+        attemptsLeft -
+        1;
 
       setAttemptsLeft(
         newAttempts
@@ -464,13 +639,21 @@ export default function GamePage() {
       if (
         newAttempts <= 0
       ) {
-        setLocked(true);
+        setLocked(
+          true
+        );
       }
     }
   }
 
+  // =========================================================
+  // اللاعبين
+  // =========================================================
+
   const playersList =
-    Object.entries(players).map(
+    Object.entries(
+      players
+    ).map(
       ([id, p]) => ({
         id,
         ...p,
@@ -478,10 +661,16 @@ export default function GamePage() {
     );
 
   const topSeats =
-    playersList.slice(0, 5);
+    playersList.slice(
+      0,
+      5
+    );
 
   const bottomSeats =
-    playersList.slice(5, 10);
+    playersList.slice(
+      5,
+      10
+    );
 
   const sortedLeaderboard =
     [...playersList].sort(
@@ -492,19 +681,30 @@ export default function GamePage() {
 
   const playerCompleted =
     pair &&
-    Object.keys(found)
-      .length ===
-      pair.differences.length;
+    Object.keys(
+      found
+    ).length ===
+      pair.differences
+        .length;
+
+  // =========================================================
+  // الواجهة
+  // =========================================================
 
   return (
-    <main style={styles.page}>
+    <main
+      style={styles.page}
+    >
       {/* ---------- خلفية الفيديو ---------- */}
+
       <video
         autoPlay
         loop
         muted
         playsInline
-        style={styles.bgVideo}
+        style={
+          styles.bgVideo
+        }
       >
         <source
           src="/casino-background.MP4"
@@ -513,10 +713,13 @@ export default function GamePage() {
       </video>
 
       <div
-        style={styles.overlay}
+        style={
+          styles.overlay
+        }
       />
 
       {/* ---------- الأصوات ---------- */}
+
       <audio
         ref={musicRef}
         loop
@@ -524,18 +727,25 @@ export default function GamePage() {
       />
 
       <audio
-        ref={correctSoundRef}
+        ref={
+          correctSoundRef
+        }
         src="/sounds/correct.mp3"
       />
 
       <audio
-        ref={wrongSoundRef}
+        ref={
+          wrongSoundRef
+        }
         src="/sounds/wrong.mp3"
       />
 
       {/* ---------- زر الموسيقى ---------- */}
+
       <button
-        style={styles.muteBtn}
+        style={
+          styles.muteBtn
+        }
         onClick={() =>
           setMuted(
             (m) => !m
@@ -548,6 +758,7 @@ export default function GamePage() {
       </button>
 
       {/* ---------- إشعار دخول لاعب ---------- */}
+
       {joinToast && (
         <div
           style={
@@ -562,14 +773,17 @@ export default function GamePage() {
       {/* العد التنازلي */}
       {/* ================================================= */}
 
-      {countdown !== null && (
+      {countdown !==
+        null && (
         <div
           style={
             styles.countdownOverlay
           }
         >
           <div
-            key={countdown}
+            key={
+              countdown
+            }
             style={
               styles.countdownNumber
             }
@@ -591,9 +805,12 @@ export default function GamePage() {
       {/* انتظار اختيار الصور */}
       {/* ================================================= */}
 
-      {!pairId || !pair ? (
+      {!pairId ||
+      !pair ? (
         <div
-          style={styles.center}
+          style={
+            styles.center
+          }
         >
           <p
             style={{
@@ -610,6 +827,7 @@ export default function GamePage() {
       ) : (
         <>
           {/* ---------- شريط المعلومات ---------- */}
+
           <div
             style={
               styles.topBar
@@ -619,7 +837,8 @@ export default function GamePage() {
               style={{
                 color:
                   "#f8d46b",
-                fontWeight: 900,
+                fontWeight:
+                  900,
                 fontSize: 20,
               }}
             >
@@ -670,6 +889,7 @@ export default function GamePage() {
           </div>
 
           {/* ---------- المقاعد العلوية ---------- */}
+
           {!roundEnded && (
             <SeatRow
               seats={
@@ -704,7 +924,10 @@ export default function GamePage() {
                   }
                 >
                   {sortedLeaderboard.map(
-                    (p, i) => (
+                    (
+                      p,
+                      i
+                    ) => (
                       <div
                         key={
                           p.id
@@ -772,8 +995,7 @@ export default function GamePage() {
                 >
                   بانتظار أن
                   يبدأ المضيف
-                  الجولة
-                  التالية...
+                  الجولة التالية...
                 </p>
               </div>
             ) : (
@@ -945,6 +1167,7 @@ export default function GamePage() {
           )}
 
           {/* ---------- المقاعد السفلية ---------- */}
+
           {!roundEnded && (
             <SeatRow
               seats={
@@ -992,7 +1215,9 @@ export default function GamePage() {
           }
         >
           <img
-            src={zoomSrc}
+            src={
+              zoomSrc
+            }
             alt="zoom"
             style={
               styles.zoomImg
@@ -1339,8 +1564,7 @@ const styles = {
       10,
     color:
       "#fff",
-    fontSize:
-      24,
+    fontSize: 24,
     fontWeight:
       700,
     letterSpacing:
@@ -1607,6 +1831,7 @@ const styles = {
 /*
   Animation للعد التنازلي
 */
+
 if (
   typeof document !==
   "undefined"
