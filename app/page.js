@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { db } from "../lib/firebase";
 import { ref, set, onValue, onDisconnect, remove } from "firebase/database";
 
@@ -15,6 +16,7 @@ const avatars = [
 ];
 
 export default function Home() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState(avatars[0]);
   const [joined, setJoined] = useState(false);
@@ -49,9 +51,9 @@ export default function Home() {
 
   useEffect(() => {
     if (joined && gameStatus === "playing") {
-      window.location.href = "/game";
+      router.push("/game");
     }
-  }, [joined, gameStatus]);
+  }, [joined, gameStatus, router]);
 
   function handleJoin() {
     const id = playerIdRef.current;
