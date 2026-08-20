@@ -37,21 +37,27 @@ export default function GamePage() {
   // ---------- حالة اللعبة ----------
   useEffect(() => {
     const gameRef = ref(db, "game");
+
     const unsubscribe = onValue(gameRef, (snapshot) => {
       const data = snapshot.val() || {};
+
       setPairId(data.currentPairId || null);
       setStartedAt(data.startedAt || null);
     });
+
     return () => unsubscribe();
   }, []);
 
   // ---------- بيانات المستوى الحالي ----------
   useEffect(() => {
     if (!pairId) return;
+
     const pairRef = ref(db, `imagePairs/${pairId}`);
+
     const unsubscribe = onValue(pairRef, (snapshot) => {
       setPair(snapshot.val());
     });
+
     return () => unsubscribe();
   }, [pairId]);
 
@@ -71,7 +77,11 @@ export default function GamePage() {
       setRoundEnded(false);
       setShowLeaderboard(false);
 
-      set(ref(db, `players/${playerIdRef.current}/score`), 0);
+      set(
+        ref(db, `players/${playerIdRef.current}/score`),
+        0
+      );
+
       set(
         ref(db, `players/${playerIdRef.current}/attemptsLeft`),
         ATTEMPTS_START
@@ -85,7 +95,11 @@ export default function GamePage() {
 
     const interval = setInterval(() => {
       const elapsed = (Date.now() - startedAt) / 1000;
-      const rem = Math.max(0, pair.timeLimit - elapsed);
+
+      const rem = Math.max(
+        0,
+        pair.timeLimit - elapsed
+      );
 
       setRemaining(rem);
 
@@ -117,15 +131,19 @@ export default function GamePage() {
     const unsubscribe = onValue(playersRef, (snapshot) => {
       const data = snapshot.val() || {};
 
-      // كشف لاعب جديد
       Object.entries(data).forEach(([id, p]) => {
         if (
           !knownPlayerIds.current.has(id) &&
           knownPlayerIds.current.size > 0
         ) {
-          setJoinToast(`🎉 ${p.name} انضم للعبة`);
+          setJoinToast(
+            `🎉 ${p.name} انضم للعبة`
+          );
 
-          setTimeout(() => setJoinToast(null), 3000);
+          setTimeout(
+            () => setJoinToast(null),
+            3000
+          );
         }
 
         knownPlayerIds.current.add(id);
@@ -160,10 +178,18 @@ export default function GamePage() {
   function handleImageClick(e) {
     if (locked || roundEnded || !pair) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect =
+      e.currentTarget.getBoundingClientRect();
 
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    const xPct =
+      ((e.clientX - rect.left) /
+        rect.width) *
+      100;
+
+    const yPct =
+      ((e.clientY - rect.top) /
+        rect.height) *
+      100;
 
     let hitIndex = -1;
 
@@ -171,7 +197,8 @@ export default function GamePage() {
       if (found[i]) return;
 
       const dist = Math.sqrt(
-        (d.x - xPct) ** 2 + (d.y - yPct) ** 2
+        (d.x - xPct) ** 2 +
+          (d.y - yPct) ** 2
       );
 
       if (dist <= d.radius) {
@@ -189,18 +216,22 @@ export default function GamePage() {
 
       setFound(newFound);
 
-      const newScore = score + POINTS_PER_DIFF;
+      const newScore =
+        score + POINTS_PER_DIFF;
 
       setScore(newScore);
 
       set(
-        ref(db, `players/${playerIdRef.current}/score`),
+        ref(
+          db,
+          `players/${playerIdRef.current}/score`
+        ),
         newScore
       );
 
-      // إذا وجد اللاعب جميع الاختلافات:
-      // لا ننهي الجولة.
-      // فقط نقفل اللاعب وننتظر انتهاء الوقت وبقية اللاعبين.
+      // إذا وجد اللاعب جميع الاختلافات
+      // لا تنتهي الجولة، فقط نقفل اللاعب
+      // وننتظر بقية اللاعبين.
       if (
         Object.keys(newFound).length ===
         pair.differences.length
@@ -212,14 +243,21 @@ export default function GamePage() {
 
       setFlashRed(true);
 
-      setTimeout(() => setFlashRed(false), 300);
+      setTimeout(
+        () => setFlashRed(false),
+        300
+      );
 
-      const newAttempts = attemptsLeft - 1;
+      const newAttempts =
+        attemptsLeft - 1;
 
       setAttemptsLeft(newAttempts);
 
       set(
-        ref(db, `players/${playerIdRef.current}/attemptsLeft`),
+        ref(
+          db,
+          `players/${playerIdRef.current}/attemptsLeft`
+        ),
         newAttempts
       );
 
@@ -229,17 +267,30 @@ export default function GamePage() {
     }
   }
 
-  const playersList = Object.entries(players).map(([id, p]) => ({
+  const playersList = Object.entries(
+    players
+  ).map(([id, p]) => ({
     id,
     ...p,
   }));
 
-  const topSeats = playersList.slice(0, 5);
-  const bottomSeats = playersList.slice(5, 10);
+  const topSeats =
+    playersList.slice(0, 5);
 
-  const sortedLeaderboard = [...playersList].sort(
-    (a, b) => (b.score || 0) - (a.score || 0)
-  );
+  const bottomSeats =
+    playersList.slice(5, 10);
+
+  const sortedLeaderboard =
+    [...playersList].sort(
+      (a, b) =>
+        (b.score || 0) -
+        (a.score || 0)
+    );
+
+  const playerCompleted =
+    pair &&
+    Object.keys(found).length ===
+      pair.differences.length;
 
   return (
     <main style={styles.page}>
@@ -277,7 +328,9 @@ export default function GamePage() {
 
       <button
         style={styles.muteBtn}
-        onClick={() => setMuted((m) => !m)}
+        onClick={() =>
+          setMuted((m) => !m)
+        }
       >
         {muted ? "🔇" : "🔊"}
       </button>
@@ -296,7 +349,8 @@ export default function GamePage() {
               fontSize: 20,
             }}
           >
-            بانتظار قيام المضيف باختيار الصور...
+            بانتظار قيام المضيف باختيار
+            الصور...
           </p>
         </div>
       ) : (
@@ -309,10 +363,16 @@ export default function GamePage() {
                 fontSize: 20,
               }}
             >
-              ⏱ {Math.ceil(remaining)} ثانية
+              ⏱{" "}
+              {Math.ceil(remaining)}{" "}
+              ثانية
             </div>
 
-            <div style={{ color: "white" }}>
+            <div
+              style={{
+                color: "white",
+              }}
+            >
               النقاط:{" "}
               <strong
                 style={{
@@ -323,7 +383,11 @@ export default function GamePage() {
               </strong>
             </div>
 
-            <div style={{ color: "white" }}>
+            <div
+              style={{
+                color: "white",
+              }}
+            >
               المحاولات المتبقية:{" "}
               <strong
                 style={{
@@ -353,43 +417,57 @@ export default function GamePage() {
                   🏆 التصنيف
                 </h2>
 
-                <div style={styles.leaderboardList}>
-                  {sortedLeaderboard.map((p, i) => (
-                    <div
-                      key={p.id}
-                      style={styles.leaderboardRow}
-                    >
-                      <span
+                <div
+                  style={
+                    styles.leaderboardList
+                  }
+                >
+                  {sortedLeaderboard.map(
+                    (p, i) => (
+                      <div
+                        key={p.id}
                         style={
-                          styles.leaderboardRank
+                          styles.leaderboardRow
                         }
                       >
-                        #{i + 1}
-                      </span>
-
-                      {p.avatar && (
-                        <img
-                          src={p.avatar}
-                          alt={p.name}
+                        <span
                           style={
-                            styles.leaderboardAvatar
+                            styles.leaderboardRank
                           }
-                        />
-                      )}
+                        >
+                          #{i + 1}
+                        </span>
 
-                      <span style={{ flex: 1 }}>
-                        {p.name}
-                      </span>
+                        {p.avatar && (
+                          <img
+                            src={p.avatar}
+                            alt={p.name}
+                            style={
+                              styles.leaderboardAvatar
+                            }
+                          />
+                        )}
 
-                      <span
-                        style={{
-                          color: "#f8d46b",
-                        }}
-                      >
-                        {p.score || 0} نقطة
-                      </span>
-                    </div>
-                  ))}
+                        <span
+                          style={{
+                            flex: 1,
+                          }}
+                        >
+                          {p.name}
+                        </span>
+
+                        <span
+                          style={{
+                            color:
+                              "#f8d46b",
+                          }}
+                        >
+                          {p.score || 0}{" "}
+                          نقطة
+                        </span>
+                      </div>
+                    )
+                  )}
                 </div>
 
                 <p
@@ -398,25 +476,34 @@ export default function GamePage() {
                     marginTop: 20,
                   }}
                 >
-                  بانتظار أن يبدأ المضيف الجولة التالية...
+                  بانتظار أن يبدأ المضيف
+                  الجولة التالية...
                 </p>
               </div>
             ) : (
-              <div style={styles.revealFade}>
+              <div
+                style={
+                  styles.revealFade
+                }
+              >
                 <h3
                   style={{
                     textAlign: "center",
                     color: "#f8d46b",
                   }}
                 >
-                  {Object.keys(found).length ===
-                  pair.differences.length
+                  {playerCompleted
                     ? "🎉 لقد عثرت على جميع الاختلافات!"
                     : "⏰ انتهى الوقت!"}
                 </h3>
 
-                <div style={styles.imagesRow}>
-                  {[pair.image1, pair.image2].map(
+                <div
+                  style={styles.imagesRow}
+                >
+                  {[
+                    pair.image1,
+                    pair.image2,
+                  ].map(
                     (src, idx) => (
                       <div
                         key={idx}
@@ -425,7 +512,9 @@ export default function GamePage() {
                         }
                       >
                         <div
-                          style={styles.imgWrap}
+                          style={
+                            styles.imgWrap
+                          }
                         >
                           <img
                             src={src}
@@ -474,35 +563,58 @@ export default function GamePage() {
             >
               <ImageBox
                 src={pair.image1}
-                onClick={handleImageClick}
+                onClick={
+                  handleImageClick
+                }
                 found={found}
-                differences={pair.differences}
+                differences={
+                  pair.differences
+                }
                 locked={locked}
                 onZoom={() =>
-                  setZoomSrc(pair.image1)
+                  setZoomSrc(
+                    pair.image1
+                  )
                 }
               />
 
               <ImageBox
                 src={pair.image2}
-                onClick={handleImageClick}
+                onClick={
+                  handleImageClick
+                }
                 found={found}
-                differences={pair.differences}
+                differences={
+                  pair.differences
+                }
                 locked={locked}
                 onZoom={() =>
-                  setZoomSrc(pair.image2)
+                  setZoomSrc(
+                    pair.image2
+                  )
                 }
               />
             </div>
           )}
 
           {!roundEnded && (
-            <SeatRow seats={bottomSeats} />
+            <SeatRow
+              seats={bottomSeats}
+            />
           )}
 
           {locked && !roundEnded && (
-            <div style={styles.lockedBanner}>
-              🔒 خلصت محاولاتك، استنى نهاية الجولة
+            <div
+              style={{
+                ...styles.lockedBanner,
+                color: playerCompleted
+                  ? "#00ff88"
+                  : "#e04b3f",
+              }}
+            >
+              {playerCompleted
+                ? "🎉 أحسنت! وجدت جميع الاختلافات — انتظر بقية اللاعبين..."
+                : "🔒 خلصت محاولاتك، استنى نهاية الجولة"}
             </div>
           )}
         </>
@@ -511,7 +623,9 @@ export default function GamePage() {
       {zoomSrc && (
         <div
           style={styles.zoomOverlay}
-          onClick={() => setZoomSrc(null)}
+          onClick={() =>
+            setZoomSrc(null)
+          }
         >
           <img
             src={zoomSrc}
@@ -521,7 +635,9 @@ export default function GamePage() {
 
           <button
             style={styles.zoomClose}
-            onClick={() => setZoomSrc(null)}
+            onClick={() =>
+              setZoomSrc(null)
+            }
           >
             ✕
           </button>
@@ -564,29 +680,36 @@ function ImageBox({
           draggable={false}
         />
 
-        {Object.keys(found).map((i) => {
-          const d = differences[i];
+        {Object.keys(found).map(
+          (i) => {
+            const d = differences[i];
 
-          return (
-            <div
-              key={i}
-              style={{
-                ...styles.foundMarker,
-                left: `${d.x}%`,
-                top: `${d.y}%`,
-                width: `${d.radius * 2}%`,
-                height: `${d.radius * 2}%`,
-              }}
-            />
-          );
-        })}
+            return (
+              <div
+                key={i}
+                style={{
+                  ...styles.foundMarker,
+                  left: `${d.x}%`,
+                  top: `${d.y}%`,
+                  width: `${
+                    d.radius * 2
+                  }%`,
+                  height: `${
+                    d.radius * 2
+                  }%`,
+                }}
+              />
+            );
+          }
+        )}
       </div>
     </div>
   );
 }
 
 function SeatRow({ seats }) {
-  if (seats.length === 0) return null;
+  if (seats.length === 0)
+    return null;
 
   return (
     <div style={styles.seatRow}>
@@ -596,13 +719,17 @@ function SeatRow({ seats }) {
           style={styles.seat}
         >
           <div
-            style={styles.seatAvatarWrap}
+            style={
+              styles.seatAvatarWrap
+            }
           >
             {p.avatar && (
               <img
                 src={p.avatar}
                 alt={p.name}
-                style={styles.seatAvatar}
+                style={
+                  styles.seatAvatar
+                }
               />
             )}
 
@@ -617,15 +744,23 @@ function SeatRow({ seats }) {
             />
           </div>
 
-          <span style={styles.seatName}>
+          <span
+            style={styles.seatName}
+          >
             {p.name}
           </span>
 
-          <span style={styles.seatScore}>
+          <span
+            style={styles.seatScore}
+          >
             {p.score || 0} نقطة
           </span>
 
-          <span style={styles.seatAttempts}>
+          <span
+            style={
+              styles.seatAttempts
+            }
+          >
             محاولات:{" "}
             {p.attemptsLeft ??
               ATTEMPTS_START}
@@ -641,7 +776,8 @@ const styles = {
     position: "relative",
     minHeight: "100vh",
     color: "white",
-    fontFamily: "Arial, sans-serif",
+    fontFamily:
+      "Arial, sans-serif",
     padding: 20,
     overflow: "hidden",
   },
@@ -658,7 +794,8 @@ const styles = {
   overlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(3,3,2,0.78)",
+    background:
+      "rgba(3,3,2,0.78)",
     zIndex: -1,
   },
 
@@ -667,7 +804,8 @@ const styles = {
     top: 16,
     left: 16,
     zIndex: 20,
-    background: "rgba(0,0,0,0.5)",
+    background:
+      "rgba(0,0,0,0.5)",
     border: "1px solid #444",
     borderRadius: "50%",
     width: 44,
@@ -682,10 +820,13 @@ const styles = {
     top: 20,
     right: 20,
     zIndex: 30,
-    background: "rgba(0,0,0,0.75)",
-    border: "1px solid #f8d46b",
+    background:
+      "rgba(0,0,0,0.75)",
+    border:
+      "1px solid #f8d46b",
     color: "#f8d46b",
-    padding: "10px 18px",
+    padding:
+      "10px 18px",
     borderRadius: 20,
     animation: "none",
   },
@@ -699,17 +840,21 @@ const styles = {
 
   topBar: {
     display: "flex",
-    justifyContent: "space-around",
+    justifyContent:
+      "space-around",
     padding: 15,
-    background: "rgba(232,184,74,0.08)",
+    background:
+      "rgba(232,184,74,0.08)",
     borderRadius: 12,
     marginBottom: 12,
-    border: "1px solid rgba(232,184,74,0.3)",
+    border:
+      "1px solid rgba(232,184,74,0.3)",
   },
 
   seatRow: {
     display: "flex",
-    justifyContent: "center",
+    justifyContent:
+      "center",
     gap: 10,
     flexWrap: "wrap",
     margin: "10px 0",
@@ -717,11 +862,14 @@ const styles = {
 
   seat: {
     display: "flex",
-    flexDirection: "column",
+    flexDirection:
+      "column",
     alignItems: "center",
-    background: "rgba(255,255,255,0.07)",
+    background:
+      "rgba(255,255,255,0.07)",
     borderRadius: 12,
-    padding: "6px 10px",
+    padding:
+      "6px 10px",
     minWidth: 76,
   },
 
@@ -734,7 +882,8 @@ const styles = {
     height: 40,
     borderRadius: "50%",
     objectFit: "cover",
-    border: "2px solid #f8d46b",
+    border:
+      "2px solid #f8d46b",
   },
 
   statusDot: {
@@ -744,7 +893,8 @@ const styles = {
     width: 10,
     height: 10,
     borderRadius: "50%",
-    border: "2px solid #111",
+    border:
+      "2px solid #111",
   },
 
   seatName: {
@@ -766,8 +916,10 @@ const styles = {
     display: "flex",
     gap: 15,
     flexWrap: "wrap",
-    justifyContent: "center",
-    transition: "filter 0.2s",
+    justifyContent:
+      "center",
+    transition:
+      "filter 0.2s",
   },
 
   imgWrapOuter: {
@@ -782,17 +934,20 @@ const styles = {
     top: 8,
     right: 8,
     zIndex: 5,
-    background: "rgba(0,0,0,0.6)",
+    background:
+      "rgba(0,0,0,0.6)",
     border: "1px solid #555",
     borderRadius: 8,
     color: "#fff",
-    padding: "4px 10px",
+    padding:
+      "4px 10px",
     cursor: "pointer",
   },
 
   imgWrap: {
     position: "relative",
-    border: "2px solid #333",
+    border:
+      "2px solid #333",
     borderRadius: 12,
     overflow: "hidden",
   },
@@ -805,8 +960,10 @@ const styles = {
 
   foundMarker: {
     position: "absolute",
-    transform: "translate(-50%, -50%)",
-    border: "3px solid #00ff88",
+    transform:
+      "translate(-50%, -50%)",
+    border:
+      "3px solid #00ff88",
     borderRadius: "50%",
     boxShadow:
       "0 0 15px rgba(0,255,136,0.6)",
@@ -816,7 +973,7 @@ const styles = {
     textAlign: "center",
     marginTop: 16,
     fontSize: 18,
-    color: "#e04b3f",
+    fontWeight: 700,
   },
 
   revealFade: {
@@ -830,18 +987,23 @@ const styles = {
 
   leaderboardList: {
     display: "flex",
-    flexDirection: "column",
+    flexDirection:
+      "column",
     gap: 8,
-    width: "min(90%, 420px)",
-    margin: "16px auto 0",
+    width:
+      "min(90%, 420px)",
+    margin:
+      "16px auto 0",
   },
 
   leaderboardRow: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    background: "rgba(255,255,255,0.08)",
-    padding: "8px 14px",
+    background:
+      "rgba(255,255,255,0.08)",
+    padding:
+      "8px 14px",
     borderRadius: 12,
   },
 
@@ -861,11 +1023,13 @@ const styles = {
   zoomOverlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.9)",
+    background:
+      "rgba(0,0,0,0.9)",
     zIndex: 50,
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
     padding: 20,
   },
 
@@ -879,7 +1043,8 @@ const styles = {
     position: "absolute",
     top: 20,
     right: 20,
-    background: "rgba(255,255,255,0.15)",
+    background:
+      "rgba(255,255,255,0.15)",
     border: "none",
     color: "#fff",
     borderRadius: "50%",
