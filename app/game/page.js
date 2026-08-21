@@ -357,8 +357,20 @@ export default function GamePage() {
 
           if (rem <= 0) {
             setRoundEnded(true);
+
+            // ثواني عرض الحل (الدوائر الصفراء/الخضراء) هي
+            // الفرق بين الوقت الحالي ووقت انتهاء الجولة فعلياً
+            // (limit) — احتساب مطلق وليس مؤقتاً محلياً يبدأ من
+            // لحظة فتح الصفحة. هذا يضمن أنه لو اللاعب بدّل
+            // الصفحة ورجع أثناء عرض التصنيف، يشوف التصنيف
+            // مباشرة بدل ما يرجع يشوف الصور من جديد.
+            const revealElapsed = elapsed - limit;
+            setShowLeaderboard(
+              revealElapsed >= REVEAL_BEFORE_LEADERBOARD
+            );
           } else {
             setRoundEnded(false);
+            setShowLeaderboard(false);
           }
         };
 
@@ -388,23 +400,12 @@ export default function GamePage() {
   // بعد نهاية الجولة
   // =========================================================
 
-  useEffect(() => {
-    if (!roundEnded) {
-      return;
-    }
-
-    const t = setTimeout(
-      () => {
-        setShowLeaderboard(true);
-      },
-      REVEAL_BEFORE_LEADERBOARD *
-        1000
-    );
-
-    return () => {
-      clearTimeout(t);
-    };
-  }, [roundEnded]);
+  // ملاحظة: ظهور قائمة التصنيف (showLeaderboard) أصبح يُحسب
+  // مباشرة داخل updateTimer أعلاه بشكل مطلق (منذ وقت انتهاء
+  // الجولة الحقيقي)، بدل useEffect منفصل بمؤقت نسبي كان يعيد
+  // بدء العد من لحظة فتح/تحديث الصفحة — وهذا بالضبط ما كان
+  // يسبب رجوع اللاعب لمشهد الصور عند تبديل الصفحة والرجوع
+  // أثناء عرض التصنيف.
 
   // =========================================================
   // اللاعبين
