@@ -1,10 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { db } from "../../lib/firebase";
+import { db, auth } from "../../lib/firebase";
 import { ref, onValue, update } from "firebase/database";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 
-const HOST_PASSWORD = "055105";
+// هذا مجرد معرّف حساب المضيف (مو سرّي) — كلمة المرور
+// الحقيقية غير موجودة إطلاقاً في الكود، بل مخزّنة ومُتحقَّق
+// منها داخل Firebase Authentication نفسه.
+const HOST_EMAIL = "host@difference-game.local";
 const COUNTDOWN_SECONDS = 5;
 const REVEAL_SECONDS = 5;
 
@@ -62,11 +70,14 @@ export default function HostPage() {
     };
   }, [authorized]);
 
+  // نعتمد على Firebase Auth نفسه لمعرفة هل المضيف مسجّل
+  // دخول أو لا (يبقى مسجلاً حتى بعد تحديث الصفحة تلقائياً،
+  // بدون أي حيلة يدوية بـ sessionStorage).
   useEffect(() => {
-    const saved = sessionStorage.getItem("hostAuthorized");
-    if (saved === "true") {
-      setAuthorized(true);
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthorized(!!user && user.email === HOST_EMAIL);
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -106,13 +117,15 @@ export default function HostPage() {
   }, [authorized]);
 
   function handleLogin() {
-    if (passwordInput === HOST_PASSWORD) {
-      setAuthorized(true);
-      sessionStorage.setItem("hostAuthorized", "true");
-      setError("");
-    } else {
+    setError("");
+    signInWithEmailAndPassword(auth, HOST_EMAIL, passwordInput).catch(() => {
       setError("كلمة المرور غير صحيحة");
-    }
+    });
+  }
+
+  function handleLogout() {
+    signOut(auth);
+    setPasswordInput("");
   }
 
   // =========================================================
@@ -302,7 +315,22 @@ export default function HostPage() {
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <h1 style={{ color: "#f8d46b" }}>لوحة تحكم المضيف</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1 style={{ color: "#f8d46b" }}>لوحة تحكم المضيف</h1>
+        <button
+          onClick={handleLogout}
+          style={{
+            background: "transparent",
+            border: "1px solid #555",
+            color: "#aaa",
+            borderRadius: 8,
+            padding: "8px 16px",
+            cursor: "pointer",
+          }}
+        >
+          تسجيل خروج
+        </button>
+      </div>
 
       <p style={{ fontSize: 16 }}>
         حالة الجولة: <strong style={{ color: "#f8d46b" }}>{phaseLabels[phase]}</strong>
