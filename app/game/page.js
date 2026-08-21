@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { db } from "../../lib/firebase";
+import { db, auth } from "../../lib/firebase";
 import { ref, onValue, set } from "firebase/database";
+import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
 
 const ATTEMPTS_START = 5;
 const POINTS_PER_DIFF = 50;
@@ -10,6 +11,7 @@ const REVEAL_BEFORE_LEADERBOARD = 5;
 
 export default function GamePage() {
   const [pairId, setPairId] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [pair, setPair] = useState(null);
   const [startedAt, setStartedAt] = useState(null);
   const [remaining, setRemaining] = useState(0);
@@ -95,6 +97,22 @@ export default function GamePage() {
   }, []);
 
   // =========================================================
+  // تسجيل دخول مجهول (Anonymous) — لازم قبل أي قراءة/كتابة
+  // لأن قواعد Firebase أصبحت تمنع الوصول بدون تسجيل دخول
+  // =========================================================
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setAuthReady(true);
+      } else {
+        signInAnonymously(auth).catch(() => {});
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // =========================================================
   // رقم اللاعب
   // =========================================================
 
@@ -108,6 +126,8 @@ export default function GamePage() {
   // =========================================================
 
   useEffect(() => {
+    if (!authReady) return;
+
     const gameRef = ref(db, "game");
 
     const unsubscribe = onValue(
@@ -126,13 +146,15 @@ export default function GamePage() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [authReady]);
 
   // =========================================================
   // العد التنازلي 5 4 3 2 1
   // =========================================================
 
   useEffect(() => {
+    if (!authReady) return;
+
     const gameRef = ref(db, "game");
 
     let interval = null;
@@ -200,14 +222,14 @@ export default function GamePage() {
 
       unsubscribe();
     };
-  }, []);
+  }, [authReady]);
 
   // =========================================================
   // بيانات الصور
   // =========================================================
 
   useEffect(() => {
-    if (!pairId) {
+    if (!authReady || !pairId) {
       setPair(null);
       return;
     }
@@ -227,7 +249,7 @@ export default function GamePage() {
     );
 
     return () => unsubscribe();
-  }, [pairId]);
+  }, [pairId, authReady]);
 
   // =========================================================
   // تصفير الجولة الجديدة
@@ -412,6 +434,8 @@ export default function GamePage() {
   // =========================================================
 
   useEffect(() => {
+    if (!authReady) return;
+
     const playersRef =
       ref(db, "players");
 
@@ -468,7 +492,7 @@ export default function GamePage() {
 
     return () =>
       unsubscribe();
-  }, []);
+  }, [authReady]);
 
   // =========================================================
   // الموسيقى
