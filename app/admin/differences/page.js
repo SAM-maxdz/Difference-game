@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { ref, push, set } from "firebase/database";
-import { db } from "../../../lib/firebase";
+import { db, auth } from "../../../lib/firebase";
+import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
+
+// نفس حساب المضيف المستخدم في لوحة التحكم — هذه الأداة تكتب
+// مباشرة في imagePairs، فيجب حمايتها بنفس الطريقة.
+const HOST_EMAIL = "host@difference-game.local";
 
 // أداة الإدارة: تحديد نقاط الاختلاف بالضغط على الصورة
 // ملاحظة مهمة: هذه الأداة لا ترفع الصور إلى أي خادم.
@@ -12,6 +17,24 @@ import { db } from "../../../lib/firebase";
 // وحفظ كل ذلك في Firebase (دون استخدام Storage، ودون الحاجة لخطة Blaze).
 
 export default function DifferencesAdmin() {
+  const [authorized, setAuthorized] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [loginError, setLoginError] = useState("");
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthorized(!!user && user.email === HOST_EMAIL);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  function handleLogin() {
+    setLoginError("");
+    signInWithEmailAndPassword(auth, HOST_EMAIL, passwordInput).catch(() => {
+      setLoginError("كلمة المرور غير صحيحة");
+    });
+  }
+
   const [image1, setImage1] = useState(null); // { file, url } - للمعاينة المحلية فقط
   const [image2, setImage2] = useState(null);
   const [image1Path, setImage1Path] = useState(""); // المسار الحقيقي داخل public/
@@ -113,6 +136,57 @@ export default function DifferencesAdmin() {
       setSaving(false);
     }
   };
+
+  if (!authorized) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0e0e16",
+          color: "#fff",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "system-ui, sans-serif",
+          gap: 15,
+          padding: 20,
+        }}
+      >
+        <h2 style={{ color: "#ffb800" }}>تسجيل دخول المضيف</h2>
+        <input
+          type="password"
+          placeholder="كلمة المرور"
+          value={passwordInput}
+          onChange={(e) => setPasswordInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+          style={{
+            padding: 14,
+            borderRadius: 10,
+            border: "1px solid #444",
+            background: "rgba(255,255,255,0.05)",
+            color: "white",
+            textAlign: "center",
+          }}
+        />
+        <button
+          onClick={handleLogin}
+          style={{
+            padding: "12px 28px",
+            background: "linear-gradient(90deg,#ffb800,#ff7a00)",
+            border: "none",
+            borderRadius: 10,
+            color: "#1a1a1a",
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
+        >
+          دخول
+        </button>
+        {loginError && <p style={{ color: "#ff6b6b" }}>{loginError}</p>}
+      </div>
+    );
+  }
 
   return (
     <div style={styles.page}>
