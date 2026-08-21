@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "../../lib/firebase";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, update } from "firebase/database";
 
 const HOST_PASSWORD = "055105";
 const COUNTDOWN_SECONDS = 5;
@@ -27,6 +27,40 @@ export default function HostPage() {
   const [selectedPairId, setSelectedPairId] = useState("");
   const [selectedDuration, setSelectedDuration] = useState(null);
   const [now, setNow] = useState(Date.now());
+  const wakeLockRef = useRef(null);
+
+  // منع إعتام/قفل شاشة المضيف طول ما اللعبة مفتوحة عنده —
+  // المضيف هو من يشغّل اللعبة، فانقطاع اتصاله يعطّل الجميع.
+  useEffect(() => {
+    if (!authorized) return;
+
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request("screen");
+        }
+      } catch (err) {
+        // غير مدعوم في بعض المتصفحات، نتجاهل ونكمل عادي
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible" && !wakeLockRef.current) {
+        requestWakeLock();
+      }
+    }
+
+    requestWakeLock();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+  }, [authorized]);
 
   useEffect(() => {
     const saved = sessionStorage.getItem("hostAuthorized");
@@ -145,19 +179,26 @@ export default function HostPage() {
 
     const newCountdownStartedAt = Date.now();
 
-    set(ref(db, "game/currentPairId"), selectedPairId);
-    set(ref(db, "game/roundDuration"), selectedDuration);
-    set(ref(db, "game/countdownStartedAt"), newCountdownStartedAt);
-    set(ref(db, "game/startedAt"), null); // إزالة وقت الجولة القديمة
-    set(ref(db, "game/status"), "countdown"); // بداية العد التنازلي
+    // كتابة كل حقول الجولة الجديدة دفعة واحدة (atomic update) بدل
+    // عدة set() منفصلة — هذا يمنع وصول بيانات متضاربة/ناقصة لأي
+    // لاعب يفتح أو يحدّث صفحته بالضبط في تلك اللحظة.
+    update(ref(db), {
+      "game/currentPairId": selectedPairId,
+      "game/roundDuration": selectedDuration,
+      "game/countdownStartedAt": newCountdownStartedAt,
+      "game/startedAt": null, // إزالة وقت الجولة القديمة
+      "game/status": "countdown", // بداية العد التنازلي
+    });
 
     // بعد 5 ثوانٍ بالضبط تبدأ الجولة فعليًا
     setTimeout(() => {
       const realGameStart =
         newCountdownStartedAt + COUNTDOWN_SECONDS * 1000;
 
-      set(ref(db, "game/startedAt"), realGameStart);
-      set(ref(db, "game/status"), "playing");
+      update(ref(db), {
+        "game/startedAt": realGameStart,
+        "game/status": "playing",
+      });
     }, COUNTDOWN_SECONDS * 1000);
   }
 
@@ -170,17 +211,23 @@ export default function HostPage() {
       return;
     }
 
-    set(ref(db, "game/status"), "waiting");
-    set(ref(db, "game/startedAt"), null);
-    set(ref(db, "game/countdownStartedAt"), null);
-    set(ref(db, "game/currentPairId"), null);
-    set(ref(db, "game/roundDuration"), null);
+    update(ref(db), {
+      "game/status": "waiting",
+      "game/startedAt": null,
+      "game/countdownStartedAt": null,
+      "game/currentPairId": null,
+      "game/roundDuration": null,
+    });
 
     // تصفير نقاط ومحاولات جميع اللاعبين لبدء لعبة جديدة من الصفر
+    const playerUpdates = {};
     Object.keys(players).forEach((id) => {
-      set(ref(db, `players/${id}/score`), 0);
-      set(ref(db, `players/${id}/attemptsLeft`), 5);
+      playerUpdates[`players/${id}/score`] = 0;
+      playerUpdates[`players/${id}/attemptsLeft`] = 5;
     });
+    if (Object.keys(playerUpdates).length > 0) {
+      update(ref(db), playerUpdates);
+    }
 
     setSelectedPairId("");
     setSelectedDuration(null);
