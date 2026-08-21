@@ -46,7 +46,11 @@ export default function DifferencesAdmin() {
   const suppressClickRef = useRef(false);
   const [level, setLevel] = useState(""); // رقم المستوى: 1, 2, 3 ... 90
   const pairName = level ? `lvl${level}` : "";
-  const [timeLimit, setTimeLimit] = useState(60);
+  // ملاحظة: الوقت الفعلي لكل جولة يختاره المضيف من لوحة التحكم
+  // (30ث/1د/2د/3د/4د) وهو ما يُستخدم دائماً فعلياً. هذه القيمة
+  // ثابتة احتياطية فقط تُحفظ مع الصورة ولا تُستخدم إلا في حال
+  // خطأ غير متوقع، لذلك أُزيلت من الواجهة.
+  const FALLBACK_TIME_LIMIT = 60;
   const [defaultRadius, setDefaultRadius] = useState(3);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
@@ -128,7 +132,7 @@ export default function DifferencesAdmin() {
       name: pairName,
       image1: image1Path,
       image2: image2Path,
-      timeLimit: Number(timeLimit),
+      timeLimit: FALLBACK_TIME_LIMIT,
       differences: points.map(({ x, y, radius }) => ({ x, y, radius })),
     },
     null,
@@ -157,7 +161,7 @@ export default function DifferencesAdmin() {
         name: pairName,
         image1: image1Path,
         image2: image2Path,
-        timeLimit: Number(timeLimit),
+        timeLimit: FALLBACK_TIME_LIMIT,
         differences: points.map(({ x, y, radius }) => ({ x, y, radius })),
         createdAt: Date.now(),
       });
@@ -246,15 +250,6 @@ export default function DifferencesAdmin() {
           {pairName && (
             <span style={{ fontSize: 12, color: "#888" }}>الاسم: {pairName}</span>
           )}
-        </div>
-        <div style={styles.field}>
-          <label style={styles.label}>الوقت المخصص (ثانية)</label>
-          <input
-            type="number"
-            style={styles.input}
-            value={timeLimit}
-            onChange={(e) => setTimeLimit(e.target.value)}
-          />
         </div>
         <div style={styles.field}>
           <label style={styles.label}>نصف قطر النقطة الافتراضي (%)</label>
