@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "../lib/firebase";
+import { db, auth } from "../lib/firebase";
 import {
   ref,
   set,
@@ -10,6 +10,10 @@ import {
   onDisconnect,
   remove,
 } from "firebase/database";
+import {
+  onAuthStateChanged,
+  signInAnonymously,
+} from "firebase/auth";
 
 const avatars = [
   "/avatars/man1.PNG",
@@ -30,8 +34,22 @@ export default function Home() {
   const [joined, setJoined] = useState(false);
   const [players, setPlayers] = useState({});
   const [gameStatus, setGameStatus] = useState("waiting");
+  const [authReady, setAuthReady] = useState(false);
 
   const playerIdRef = useRef(null);
+
+  // تسجيل دخول مجهول (Anonymous) تلقائي — لازم قبل أي قراءة/كتابة
+  // لأن قواعد Firebase الآن تمنع أي وصول بدون تسجيل دخول.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setAuthReady(true);
+      } else {
+        signInAnonymously(auth).catch(() => {});
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // إنشاء ID ثابت للاعب
   useEffect(() => {
@@ -47,6 +65,8 @@ export default function Home() {
 
   // مراقبة اللاعبين الموجودين
   useEffect(() => {
+    if (!authReady) return;
+
     const playersRef = ref(db, "players");
 
     const unsubscribe = onValue(
@@ -57,10 +77,24 @@ export default function Home() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [authReady]);
+
+  // استعادة حالة "joined" تلقائياً بعد تحديث الصفحة (refresh)
+  // إذا كان اللاعب موجوداً أصلاً في قائمة اللاعبين بقاعدة البيانات،
+  // بدل ما يرجع لشاشة إدخال الاسم والصورة من الصفر ويفقد مكانه.
+  useEffect(() => {
+    if (joined) return;
+    const id = playerIdRef.current;
+    if (!id) return;
+    if (players[id]) {
+      setJoined(true);
+    }
+  }, [players, joined]);
 
   // مراقبة حالة اللعبة
   useEffect(() => {
+    if (!authReady) return;
+
     const statusRef = ref(db, "game/status");
 
     const unsubscribe = onValue(
@@ -73,7 +107,7 @@ export default function Home() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [authReady]);
 
   // =====================================================
   // الانتقال إلى اللعبة
@@ -88,13 +122,7 @@ export default function Home() {
   // ثم الصور.
   //
   useEffect(() => {
-    if (
-      joined &&
-      (
-        gameStatus === "countdown" ||
-        gameStatus === "playing"
-      )
-    ) {
+    if (joined && gameStatus !== "waiting") {
       router.push("/game");
     }
   }, [
@@ -107,7 +135,7 @@ export default function Home() {
   function handleJoin() {
     const id = playerIdRef.current;
 
-    if (!id || !name.trim()) {
+    if (!id || !name.trim() || !authReady) {
       return;
     }
 
@@ -319,7 +347,7 @@ export default function Home() {
           <button
             className="join-button"
             disabled={
-              !name.trim()
+              !name.trim() || !authReady
             }
             onClick={
               handleJoin
