@@ -41,6 +41,9 @@ export default function DifferencesAdmin() {
   const [image2Path, setImage2Path] = useState("");
   const [points, setPoints] = useState([]); // [{ id, x, y, radius }]
   const [selectedPointId, setSelectedPointId] = useState(null);
+  const [resizingId, setResizingId] = useState(null);
+  const imgWrapRef = useRef(null);
+  const suppressClickRef = useRef(false);
   const [level, setLevel] = useState(""); // رقم المستوى: 1, 2, 3 ... 90
   const pairName = level ? `lvl${level}` : "";
   const [timeLimit, setTimeLimit] = useState(60);
@@ -82,6 +85,37 @@ export default function DifferencesAdmin() {
     setPoints((prev) =>
       prev.map((p) => (p.id === id ? { ...p, radius: Number(radius) } : p))
     );
+  };
+
+  // ---- سحب مقبض الدائرة لتكبير/تصغير مساحة الضغط مباشرة ----
+  const handleResizeStart = (e, point) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedPointId(point.id);
+    setResizingId(point.id);
+    suppressClickRef.current = true;
+    try {
+      e.target.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // بعض المتصفحات القديمة لا تدعمها، نتجاهل
+    }
+  };
+
+  const handleResizeMove = (e, point) => {
+    if (resizingId !== point.id || !imgWrapRef.current) return;
+    const rect = imgWrapRef.current.getBoundingClientRect();
+    const cx = rect.left + (point.x / 100) * rect.width;
+    const cy = rect.top + (point.y / 100) * rect.height;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const distPct = (Math.sqrt(dx * dx + dy * dy) / rect.width) * 100;
+    const clamped = Math.min(30, Math.max(0.5, distPct));
+    updatePointRadius(point.id, Number(clamped.toFixed(1)));
+  };
+
+  const handleResizeEnd = (e) => {
+    e.stopPropagation();
+    setResizingId(null);
   };
 
   const clearAll = () => {
@@ -262,7 +296,17 @@ export default function DifferencesAdmin() {
 
       {image1 && image2 && (
         <div style={styles.imagesRow}>
-          <div style={styles.imgWrap} onClick={handleImageClick}>
+          <div
+            style={styles.imgWrap}
+            ref={imgWrapRef}
+            onClick={(e) => {
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                return;
+              }
+              handleImageClick(e);
+            }}
+          >
             <img src={image1.url} alt="1" style={styles.img} draggable={false} />
             {points.map((p) => (
               <div
@@ -280,7 +324,18 @@ export default function DifferencesAdmin() {
                   borderColor: selectedPointId === p.id ? "#00ff88" : "#ff3b3b",
                 }}
                 title={`x:${p.x}% y:${p.y}%`}
-              />
+              >
+                {resizingId === p.id && (
+                  <span style={styles.resizeReadout}>{p.radius}%</span>
+                )}
+                <span
+                  onPointerDown={(e) => handleResizeStart(e, p)}
+                  onPointerMove={(e) => handleResizeMove(e, p)}
+                  onPointerUp={handleResizeEnd}
+                  style={styles.resizeHandle}
+                  title="اسحب لتكبير/تصغير مساحة الضغط"
+                />
+              </div>
             ))}
           </div>
           <div style={styles.imgWrap}>
@@ -306,6 +361,10 @@ export default function DifferencesAdmin() {
       {points.length > 0 && (
         <div style={styles.listSection}>
           <h3 style={styles.subTitle}>نقاط الاختلاف ({points.length})</h3>
+          <p style={{ fontSize: 12.5, color: "#888", marginTop: -4, marginBottom: 12 }}>
+            💡 يمكنك سحب النقطة الخضراء الصغيرة على حافة كل دائرة (بالصورة
+            الأولى) لتكبيرها أو تصغيرها مباشرة، أو كتابة الرقم يدوياً بالأسفل.
+          </p>
           <div style={styles.pointsList}>
             {points.map((p, i) => (
               <div
@@ -430,6 +489,31 @@ const styles = {
     border: "2px solid",
     borderRadius: "50%",
     boxShadow: "0 0 8px rgba(0,0,0,0.6)",
+  },
+  resizeHandle: {
+    position: "absolute",
+    right: -7,
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: 16,
+    height: 16,
+    borderRadius: "50%",
+    background: "#00ff88",
+    border: "2px solid #0e0e16",
+    cursor: "ew-resize",
+    touchAction: "none",
+  },
+  resizeReadout: {
+    position: "absolute",
+    top: -22,
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "#000",
+    color: "#00ff88",
+    fontSize: 11,
+    padding: "2px 6px",
+    borderRadius: 6,
+    whiteSpace: "nowrap",
   },
   listSection: { marginTop: 12 },
   subTitle: { fontSize: 18, marginBottom: 10 },
