@@ -35,6 +35,8 @@ export default function HostPage() {
   const [selectedPairId, setSelectedPairId] = useState("");
   const [selectedDuration, setSelectedDuration] = useState(null);
   const [now, setNow] = useState(Date.now());
+  const [search, setSearch] = useState("");
+  const [labelDrafts, setLabelDrafts] = useState({});
   const wakeLockRef = useRef(null);
 
   // منع إعتام/قفل شاشة المضيف طول ما اللعبة مفتوحة عنده —
@@ -246,57 +248,38 @@ export default function HostPage() {
     setSelectedDuration(null);
   }
 
+  function commitLabel(id, fallback) {
+    const draft = labelDrafts[id];
+    if (draft === undefined) return;
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== fallback) {
+      update(ref(db), { [`imagePairs/${id}/label`]: trimmed });
+    }
+  }
+
   if (!authorized) {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          background: "#030302",
-          color: "white",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "Arial, sans-serif",
-          gap: 15,
-          padding: 20,
-        }}
-      >
-        <h2 style={{ color: "#f8d46b" }}>تسجيل دخول المضيف</h2>
+      <main style={styles.loginPage}>
+        <div style={styles.loginCard}>
+          <div style={styles.loginBadge}>♠</div>
+          <h2 style={styles.loginTitle}>لوحة تحكم المضيف</h2>
+          <p style={styles.loginSubtitle}>سجّل دخولك لبدء إدارة الجولة</p>
 
-        <input
-          type="password"
-          placeholder="كلمة المرور"
-          value={passwordInput}
-          onChange={(e) => setPasswordInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-          style={{
-            padding: 14,
-            borderRadius: 10,
-            border: "1px solid #d8b45b",
-            background: "rgba(255,255,255,0.05)",
-            color: "white",
-            textAlign: "center",
-          }}
-        />
+          <input
+            type="password"
+            placeholder="كلمة المرور"
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+            style={styles.loginInput}
+          />
 
-        <button
-          onClick={handleLogin}
-          style={{
-            padding: "12px 28px",
-            background:
-              "linear-gradient(135deg, #a86f12, #f7d574, #a86f12)",
-            border: "none",
-            borderRadius: 10,
-            color: "#120b02",
-            fontWeight: 900,
-            cursor: "pointer",
-          }}
-        >
-          دخول
-        </button>
+          <button onClick={handleLogin} style={styles.loginButton}>
+            دخول
+          </button>
 
-        {error && <p style={{ color: "#e04b3f" }}>{error}</p>}
+          {error && <p style={styles.loginError}>{error}</p>}
+        </div>
       </main>
     );
   }
@@ -305,152 +288,510 @@ export default function HostPage() {
   const pairsList = Object.entries(imagePairs);
   const roundLocked = phase === "countdown" || phase === "playing" || phase === "revealing";
 
+  const filteredPairs = pairsList.filter(([, pair]) => {
+    const label = pair.label || pair.name || "";
+    return label.toLowerCase().includes(search.trim().toLowerCase());
+  });
+
+  const phaseTone = {
+    idle: styles.pillNeutral,
+    countdown: styles.pillWarn,
+    playing: styles.pillActive,
+    revealing: styles.pillWarn,
+    leaderboard: styles.pillGold,
+  };
+
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#030302",
-        color: "white",
-        padding: 40,
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ color: "#f8d46b" }}>لوحة تحكم المضيف</h1>
-        <button
-          onClick={handleLogout}
-          style={{
-            background: "transparent",
-            border: "1px solid #555",
-            color: "#aaa",
-            borderRadius: 8,
-            padding: "8px 16px",
-            cursor: "pointer",
-          }}
-        >
-          تسجيل خروج
-        </button>
-      </div>
+    <main style={styles.page}>
+      <header style={styles.topBar}>
+        <div style={styles.topBarLeft}>
+          <span style={styles.logoBadge}>♦</span>
+          <h1 style={styles.pageTitle}>لوحة تحكم المضيف</h1>
+        </div>
+        <div style={styles.topBarRight}>
+          <span style={{ ...styles.pill, ...phaseTone[phase] }}>
+            {phaseLabels[phase]}
+          </span>
+          <button onClick={handleLogout} style={styles.logoutButton}>
+            تسجيل خروج
+          </button>
+        </div>
+      </header>
 
-      <p style={{ fontSize: 16 }}>
-        حالة الجولة: <strong style={{ color: "#f8d46b" }}>{phaseLabels[phase]}</strong>
-      </p>
+      <div style={styles.layout}>
+        {/* ============ العمود الرئيسي ============ */}
+        <div style={styles.mainColumn}>
+          {/* مكتبة الصور */}
+          <section style={styles.card}>
+            <div style={styles.cardHeaderRow}>
+              <h2 style={styles.cardTitle}>1. اختر صورة الجولة</h2>
+              <input
+                type="text"
+                placeholder="🔍 ابحث بالاسم..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={styles.searchInput}
+              />
+            </div>
 
-      <p>عدد اللاعبين: {playersList.length} / 10</p>
+            {pairsList.length === 0 ? (
+              <p style={styles.emptyText}>
+                لا توجد أي صور محفوظة بعد. أضِف صوراً من صفحة
+                /admin/differences.
+              </p>
+            ) : filteredPairs.length === 0 ? (
+              <p style={styles.emptyText}>لا توجد نتائج مطابقة للبحث.</p>
+            ) : (
+              <div style={styles.libraryScroll}>
+                <div style={styles.libraryGrid}>
+                  {filteredPairs.map(([id, pair]) => {
+                    const displayName = pair.label || pair.name || "بدون اسم";
+                    const isSelected = selectedPairId === id;
+                    return (
+                      <div
+                        key={id}
+                        onClick={() => !roundLocked && setSelectedPairId(id)}
+                        style={{
+                          ...styles.pairCard,
+                          ...(isSelected ? styles.pairCardSelected : {}),
+                          ...(roundLocked ? styles.pairCardLocked : {}),
+                        }}
+                      >
+                        {isSelected && (
+                          <span style={styles.pairCheckmark}>✓</span>
+                        )}
+                        <div style={styles.pairThumbWrap}>
+                          <img
+                            src={pair.image1}
+                            alt={displayName}
+                            style={styles.pairThumb}
+                            draggable={false}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={labelDrafts[id] ?? displayName}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            setLabelDrafts((prev) => ({
+                              ...prev,
+                              [id]: e.target.value,
+                            }))
+                          }
+                          onBlur={() => commitLabel(id, displayName)}
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && e.currentTarget.blur()
+                          }
+                          style={styles.pairNameInput}
+                        />
+                        <span style={styles.pairMeta}>
+                          {pair.differences?.length || 0} اختلاف
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </section>
 
-      <ul>
-        {playersList.map(([id, p]) => (
-          <li key={id}>
-            {p.name} — {p.score || 0} نقطة
-          </li>
-        ))}
-      </ul>
+          {/* مدة الجولة */}
+          <section style={styles.card}>
+            <h2 style={styles.cardTitle}>2. اختر مدة الجولة</h2>
+            <div style={styles.durationRow}>
+              {DURATION_OPTIONS.map((opt) => {
+                const isSelected = selectedDuration === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    disabled={roundLocked}
+                    onClick={() => setSelectedDuration(opt.value)}
+                    style={{
+                      ...styles.durationButton,
+                      ...(isSelected ? styles.durationButtonSelected : {}),
+                      ...(roundLocked ? styles.disabledLook : {}),
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
 
-      <h2 style={{ color: "#f8d46b", marginTop: 30 }}>1. اختر الصورة</h2>
-
-      {pairsList.length === 0 ? (
-        <p style={{ color: "#999" }}>
-          لا توجد أي مجموعة صور محفوظة. يرجى الانتقال إلى صفحة
-          /admin/differences لإضافة مجموعة صور جديدة.
-        </p>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 500 }}>
-          {pairsList.map(([id, pair]) => (
-            <label
-              key={id}
+          {/* أزرار التحكم */}
+          <section style={styles.controlBar}>
+            <button
+              onClick={startGame}
+              disabled={!canStart}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: 12,
-                borderRadius: 10,
-                border:
-                  selectedPairId === id ? "2px solid #f8d46b" : "1px solid #333",
-                cursor: roundLocked ? "not-allowed" : "pointer",
-                opacity: roundLocked ? 0.5 : 1,
+                ...styles.primaryButton,
+                ...(canStart ? {} : styles.primaryButtonDisabled),
               }}
             >
-              <input
-                type="radio"
-                name="pair"
-                disabled={roundLocked}
-                checked={selectedPairId === id}
-                onChange={() => setSelectedPairId(id)}
-              />
-              <span>
-                المستوى {pair.level} ({pair.name}) —{" "}
-                {pair.differences?.length || 0} اختلافات
-              </span>
-            </label>
-          ))}
+              {startButtonLabel}
+            </button>
+            <button onClick={resetGame} style={styles.secondaryButton}>
+              إعادة تعيين اللعبة بالكامل
+            </button>
+          </section>
         </div>
-      )}
 
-      <h2 style={{ color: "#f8d46b", marginTop: 30 }}>2. اختر مدة الجولة</h2>
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", maxWidth: 560 }}>
-        {DURATION_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            disabled={roundLocked}
-            onClick={() => setSelectedDuration(opt.value)}
-            style={{
-              padding: "12px 18px",
-              borderRadius: 10,
-              cursor: roundLocked ? "not-allowed" : "pointer",
-              fontWeight: 700,
-              opacity: roundLocked ? 0.5 : 1,
-              border:
-                selectedDuration === opt.value
-                  ? "2px solid #f8d46b"
-                  : "1px solid #444",
-              background:
-                selectedDuration === opt.value
-                  ? "rgba(248,212,107,0.15)"
-                  : "transparent",
-              color: selectedDuration === opt.value ? "#f8d46b" : "#ddd",
-            }}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 15, marginTop: 30 }}>
-        <button
-          onClick={startGame}
-          disabled={!canStart}
-          style={{
-            padding: "15px 30px",
-            fontSize: 18,
-            background: canStart
-              ? "linear-gradient(135deg, #a86f12, #f7d574, #a86f12)"
-              : "#333",
-            border: "none",
-            borderRadius: 10,
-            color: canStart ? "#120b02" : "#777",
-            fontWeight: 900,
-            cursor: canStart ? "pointer" : "not-allowed",
-          }}
-        >
-          {startButtonLabel}
-        </button>
-
-        <button
-          onClick={resetGame}
-          style={{
-            padding: "15px 30px",
-            fontSize: 18,
-            background: "transparent",
-            border: "1px solid #d8b45b",
-            borderRadius: 10,
-            color: "#d8b45b",
-            cursor: "pointer",
-          }}
-        >
-          إعادة تعيين اللعبة بالكامل
-        </button>
+        {/* ============ عمود اللاعبين ============ */}
+        <aside style={styles.sideColumn}>
+          <section style={styles.card}>
+            <h2 style={styles.cardTitle}>
+              اللاعبون ({playersList.length}/10)
+            </h2>
+            {playersList.length === 0 ? (
+              <p style={styles.emptyText}>لا يوجد لاعبون بعد.</p>
+            ) : (
+              <div style={styles.playersScroll}>
+                {playersList.map(([id, p]) => (
+                  <div key={id} style={styles.playerRow}>
+                    {p.avatar ? (
+                      <img
+                        src={p.avatar}
+                        alt={p.name}
+                        style={styles.playerAvatar}
+                      />
+                    ) : (
+                      <div style={styles.playerAvatarFallback}>
+                        {(p.name || "?").charAt(0)}
+                      </div>
+                    )}
+                    <span style={styles.playerName}>{p.name}</span>
+                    <span style={styles.playerScore}>{p.score || 0}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </aside>
       </div>
     </main>
   );
 }
+
+const GOLD = "#f8d46b";
+const GOLD_SOFT = "rgba(248,212,107,0.18)";
+const BORDER = "rgba(248,212,107,0.16)";
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "#0a0a0e",
+    color: "#f2f2f2",
+    fontFamily: "system-ui, -apple-system, Arial, sans-serif",
+    padding: "24px 28px 60px",
+  },
+
+  // ---- شاشة الدخول ----
+  loginPage: {
+    minHeight: "100vh",
+    background: "#0a0a0e",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  loginCard: {
+    width: "min(92%, 360px)",
+    background: "#131318",
+    border: `1px solid ${BORDER}`,
+    borderRadius: 20,
+    padding: "36px 28px",
+    textAlign: "center",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 14,
+  },
+  loginBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: "50%",
+    background: GOLD_SOFT,
+    color: GOLD,
+    fontSize: 22,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loginTitle: { color: GOLD, margin: 0, fontSize: 20 },
+  loginSubtitle: { color: "#999", margin: 0, fontSize: 13 },
+  loginInput: {
+    width: "100%",
+    padding: 14,
+    borderRadius: 10,
+    border: `1px solid ${BORDER}`,
+    background: "rgba(255,255,255,0.04)",
+    color: "white",
+    textAlign: "center",
+    fontSize: 15,
+  },
+  loginButton: {
+    width: "100%",
+    padding: "13px 28px",
+    background: `linear-gradient(135deg, #a86f12, ${GOLD}, #a86f12)`,
+    border: "none",
+    borderRadius: 10,
+    color: "#120b02",
+    fontWeight: 900,
+    cursor: "pointer",
+    fontSize: 15,
+  },
+  loginError: { color: "#e04b3f", margin: 0, fontSize: 13 },
+
+  // ---- الشريط العلوي ----
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 24,
+  },
+  topBarLeft: { display: "flex", alignItems: "center", gap: 12 },
+  topBarRight: { display: "flex", alignItems: "center", gap: 12 },
+  logoBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    background: GOLD_SOFT,
+    color: GOLD,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 18,
+  },
+  pageTitle: { color: GOLD, margin: 0, fontSize: 22 },
+  logoutButton: {
+    background: "transparent",
+    border: "1px solid #444",
+    color: "#aaa",
+    borderRadius: 8,
+    padding: "9px 16px",
+    cursor: "pointer",
+    fontSize: 13,
+  },
+
+  pill: {
+    padding: "7px 16px",
+    borderRadius: 999,
+    fontSize: 13,
+    fontWeight: 700,
+    border: "1px solid transparent",
+  },
+  pillNeutral: { background: "rgba(255,255,255,0.06)", color: "#bbb" },
+  pillWarn: { background: "rgba(255,180,60,0.12)", color: "#ffb43c", borderColor: "rgba(255,180,60,0.3)" },
+  pillActive: { background: "rgba(80,220,140,0.12)", color: "#5fe3a1", borderColor: "rgba(80,220,140,0.3)" },
+  pillGold: { background: GOLD_SOFT, color: GOLD, borderColor: BORDER },
+
+  // ---- التخطيط العام ----
+  layout: {
+    display: "flex",
+    gap: 20,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  mainColumn: {
+    flex: "2 1 480px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 20,
+    minWidth: 320,
+  },
+  sideColumn: {
+    flex: "1 1 280px",
+    minWidth: 260,
+    maxWidth: 340,
+  },
+
+  card: {
+    background: "#131318",
+    border: `1px solid ${BORDER}`,
+    borderRadius: 16,
+    padding: 20,
+  },
+  cardTitle: { color: GOLD, margin: "0 0 14px", fontSize: 16 },
+  cardHeaderRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 14,
+  },
+  emptyText: { color: "#888", fontSize: 14, margin: 0 },
+
+  searchInput: {
+    padding: "9px 14px",
+    borderRadius: 999,
+    border: "1px solid #333",
+    background: "rgba(255,255,255,0.04)",
+    color: "white",
+    fontSize: 13,
+    minWidth: 180,
+  },
+
+  // ---- مكتبة الصور ----
+  libraryScroll: {
+    maxHeight: 440,
+    overflowY: "auto",
+    paddingRight: 4,
+  },
+  libraryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+    gap: 12,
+  },
+  pairCard: {
+    position: "relative",
+    border: "2px solid rgba(255,255,255,0.08)",
+    borderRadius: 12,
+    overflow: "hidden",
+    background: "rgba(255,255,255,0.02)",
+    cursor: "pointer",
+    transition: "border-color 0.15s ease",
+  },
+  pairCardSelected: {
+    borderColor: GOLD,
+    boxShadow: `0 0 0 1px ${GOLD}`,
+  },
+  pairCardLocked: {
+    opacity: 0.45,
+    cursor: "not-allowed",
+  },
+  pairCheckmark: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: "50%",
+    background: GOLD,
+    color: "#120b02",
+    fontWeight: 900,
+    fontSize: 13,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  pairThumbWrap: {
+    width: "100%",
+    aspectRatio: "1 / 1",
+    background: "#000",
+  },
+  pairThumb: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  pairNameInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    background: "transparent",
+    border: "none",
+    borderTop: "1px solid rgba(255,255,255,0.06)",
+    color: "#eee",
+    fontSize: 12.5,
+    textAlign: "center",
+    padding: "7px 6px 2px",
+    outline: "none",
+  },
+  pairMeta: {
+    display: "block",
+    textAlign: "center",
+    color: "#777",
+    fontSize: 10.5,
+    paddingBottom: 7,
+  },
+
+  // ---- مدة الجولة ----
+  durationRow: { display: "flex", gap: 10, flexWrap: "wrap" },
+  durationButton: {
+    padding: "11px 18px",
+    borderRadius: 10,
+    cursor: "pointer",
+    fontWeight: 700,
+    fontSize: 13.5,
+    border: "1px solid #333",
+    background: "rgba(255,255,255,0.03)",
+    color: "#ddd",
+  },
+  durationButtonSelected: {
+    border: `2px solid ${GOLD}`,
+    background: GOLD_SOFT,
+    color: GOLD,
+  },
+  disabledLook: { opacity: 0.4, cursor: "not-allowed" },
+
+  // ---- أزرار التحكم ----
+  controlBar: { display: "flex", gap: 14, flexWrap: "wrap" },
+  primaryButton: {
+    padding: "15px 32px",
+    fontSize: 16,
+    background: `linear-gradient(135deg, #a86f12, ${GOLD}, #a86f12)`,
+    border: "none",
+    borderRadius: 12,
+    color: "#120b02",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  primaryButtonDisabled: {
+    background: "#2a2a2e",
+    color: "#777",
+    cursor: "not-allowed",
+  },
+  secondaryButton: {
+    padding: "15px 26px",
+    fontSize: 14,
+    background: "transparent",
+    border: `1px solid ${BORDER}`,
+    borderRadius: 12,
+    color: GOLD,
+    cursor: "pointer",
+  },
+
+  // ---- اللاعبون ----
+  playersScroll: {
+    maxHeight: 460,
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    paddingRight: 4,
+  },
+  playerRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "8px 10px",
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.03)",
+  },
+  playerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    objectFit: "cover",
+    border: `1px solid ${BORDER}`,
+  },
+  playerAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    background: GOLD_SOFT,
+    color: GOLD,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  playerName: { flex: 1, fontSize: 13.5, color: "#eee" },
+  playerScore: { color: GOLD, fontWeight: 700, fontSize: 13 },
+};
