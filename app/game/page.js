@@ -39,6 +39,60 @@ export default function GamePage() {
   const musicRef = useRef(null);
   const correctSoundRef = useRef(null);
   const wrongSoundRef = useRef(null);
+  const wakeLockRef = useRef(null);
+
+  // =========================================================
+  // منع إغلاق/إعتام الشاشة طول ما صفحة اللعبة مفتوحة
+  //
+  // بدون هذا، متصفح الهاتف يوقف تحديثات Firebase تلقائياً
+  // إذا الشاشة قفلت أو التبويب راح للخلفية، فتضيع تحديثات
+  // اللاعبين (مثل انضمام لاعب جديد) حتى ترجع تفتحها يدوياً.
+  // =========================================================
+
+  useEffect(() => {
+    let released = false;
+
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLockRef.current =
+            await navigator.wakeLock.request("screen");
+        }
+      } catch (err) {
+        // بعض المتصفحات (مثل سفاري القديم) لا تدعمها،
+        // نتجاهل الخطأ ونكمل عادي بدون Wake Lock.
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (
+        document.visibilityState === "visible" &&
+        !released &&
+        !wakeLockRef.current
+      ) {
+        requestWakeLock();
+      }
+    }
+
+    requestWakeLock();
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    return () => {
+      released = true;
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+  }, []);
 
   // =========================================================
   // رقم اللاعب
