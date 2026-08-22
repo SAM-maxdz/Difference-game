@@ -1463,8 +1463,10 @@ function SeatRow({
                 style={{
                   ...styles.statusDot,
                   background:
-                    p.attemptsLeft >
-                    0
+                    // لو الحقل فاضي تماماً (لاعب جديد لسه ما
+                    // انسجلت له محاولات)، نعتبره كامل المحاولات
+                    // (أخضر) بدل ما نعتبره خلّص محاولاته (أحمر)
+                    (p.attemptsLeft ?? ATTEMPTS_START) > 0
                       ? "#00ff88"
                       : "#e04b3f",
                 }}
