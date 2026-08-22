@@ -462,7 +462,7 @@ export default function HostPage() {
         <aside style={styles.sideColumn}>
           <section style={styles.card}>
             <h2 style={styles.cardTitle}>
-              اللاعبون ({playersList.length}/10)
+              اللاعبون ({playersList.length})
             </h2>
             {playersList.length === 0 ? (
               <p style={styles.emptyText}>لا يوجد لاعبون بعد.</p>
