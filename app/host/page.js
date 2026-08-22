@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { db, auth } from "../../lib/firebase";
-import { ref, onValue, update } from "firebase/database";
+import { ref, onValue, update, remove } from "firebase/database";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -15,6 +15,9 @@ import {
 const HOST_EMAIL = "host@difference-game.local";
 const COUNTDOWN_SECONDS = 5;
 const REVEAL_SECONDS = 5;
+// أي لاعب ما وصلت منه نبضة حياة من أكثر من هالمدة يُعتبر غير متصل
+// (قفل التبويب فعلياً لكن onDisconnect ما اشتغل، خصوصاً بسفاري)
+const STALE_THRESHOLD = 30000;
 
 const DURATION_OPTIONS = [
   { label: "30 ثانية", value: 30 },
@@ -137,6 +140,7 @@ export default function HostPage() {
   // =========================================================
 
   const countdownStartedAt = gameData.countdownStartedAt || null;
+  const locked = gameData.locked === true;
   const currentPair = gameData.currentPairId
     ? imagePairs[gameData.currentPairId]
     : null;
@@ -215,6 +219,14 @@ export default function HostPage() {
         "game/status": "playing",
       });
     }, COUNTDOWN_SECONDS * 1000);
+  }
+
+  function removePlayer(id) {
+    remove(ref(db, `players/${id}`));
+  }
+
+  function toggleLock() {
+    update(ref(db), { "game/locked": !locked });
   }
 
   function resetGame() {
@@ -434,6 +446,15 @@ export default function HostPage() {
             <button onClick={resetGame} style={styles.secondaryButton}>
               إعادة تعيين اللعبة بالكامل
             </button>
+            <button
+              onClick={toggleLock}
+              style={{
+                ...styles.secondaryButton,
+                ...(locked ? styles.lockButtonActive : {}),
+              }}
+            >
+              {locked ? "🔓 فتح اللعبة" : "🔒 قفل اللعبة"}
+            </button>
           </section>
         </div>
 
@@ -447,23 +468,47 @@ export default function HostPage() {
               <p style={styles.emptyText}>لا يوجد لاعبون بعد.</p>
             ) : (
               <div style={styles.playersScroll}>
-                {playersList.map(([id, p]) => (
-                  <div key={id} style={styles.playerRow}>
-                    {p.avatar ? (
-                      <img
-                        src={p.avatar}
-                        alt={p.name}
-                        style={styles.playerAvatar}
-                      />
-                    ) : (
-                      <div style={styles.playerAvatarFallback}>
-                        {(p.name || "?").charAt(0)}
+                {playersList.map(([id, p]) => {
+                  const isStale =
+                    !p.lastSeen || now - p.lastSeen > STALE_THRESHOLD;
+                  return (
+                    <div
+                      key={id}
+                      style={{
+                        ...styles.playerRow,
+                        ...(isStale ? styles.playerRowStale : {}),
+                      }}
+                    >
+                      {p.avatar ? (
+                        <img
+                          src={p.avatar}
+                          alt={p.name}
+                          style={styles.playerAvatar}
+                        />
+                      ) : (
+                        <div style={styles.playerAvatarFallback}>
+                          {(p.name || "?").charAt(0)}
+                        </div>
+                      )}
+                      <div style={styles.playerInfo}>
+                        <span style={styles.playerName}>
+                          {p.name || "بدون اسم"}
+                        </span>
+                        {isStale && (
+                          <span style={styles.staleTag}>غير متصل</span>
+                        )}
                       </div>
-                    )}
-                    <span style={styles.playerName}>{p.name}</span>
-                    <span style={styles.playerScore}>{p.score || 0}</span>
-                  </div>
-                ))}
+                      <span style={styles.playerScore}>{p.score || 0}</span>
+                      <button
+                        onClick={() => removePlayer(id)}
+                        title="حذف اللاعب"
+                        style={styles.removePlayerButton}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -755,6 +800,11 @@ const styles = {
     color: GOLD,
     cursor: "pointer",
   },
+  lockButtonActive: {
+    border: "1px solid rgba(224,75,63,0.4)",
+    color: "#e04b3f",
+    background: "rgba(224,75,63,0.08)",
+  },
 
   // ---- اللاعبون ----
   playersScroll: {
@@ -772,6 +822,9 @@ const styles = {
     padding: "8px 10px",
     borderRadius: 10,
     background: "rgba(255,255,255,0.03)",
+  },
+  playerRowStale: {
+    opacity: 0.5,
   },
   playerAvatar: {
     width: 32,
@@ -792,6 +845,30 @@ const styles = {
     fontWeight: 900,
     fontSize: 13,
   },
-  playerName: { flex: 1, fontSize: 13.5, color: "#eee" },
+  playerInfo: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  playerName: {
+    fontSize: 13.5,
+    color: "#eee",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  staleTag: {
+    fontSize: 10,
+    color: "#e04b3f",
+  },
   playerScore: { color: GOLD, fontWeight: 700, fontSize: 13 },
+  removePlayerButton: {
+    background: "transparent",
+    border: "none",
+    color: "#666",
+    fontSize: 15,
+    cursor: "pointer",
+    padding: "2px 6px",
+  },
 };
