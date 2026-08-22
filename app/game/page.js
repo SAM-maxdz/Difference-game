@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { db, auth } from "../../lib/firebase";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, set, update, onDisconnect } from "firebase/database";
 import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
 
 const ATTEMPTS_START = 5;
@@ -31,12 +31,17 @@ export default function GamePage() {
   const [showLeaderboard, setShowLeaderboard] =
     useState(false);
 
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(() =>
+    typeof window !== "undefined"
+      ? sessionStorage.getItem("musicMuted") === "true"
+      : false
+  );
   const [zoomSrc, setZoomSrc] = useState(null);
   const [joinToast, setJoinToast] = useState(null);
 
   const playerIdRef = useRef(null);
   const knownPlayerIds = useRef(new Set());
+  const selfInfoRef = useRef(null);
 
   const musicRef = useRef(null);
   const correctSoundRef = useRef(null);
@@ -120,6 +125,35 @@ export default function GamePage() {
     playerIdRef.current =
       sessionStorage.getItem("playerId");
   }, []);
+
+  // نبضة حياة (heartbeat) — طول ما صفحة اللعب مفتوحة، نعيد كتابة
+  // آخر اسم/صورة معروفة عن اللاعب مع وقت آخر ظهور له كل 15 ثانية.
+  // هذا يصلّح تلقائياً حالة رجوعه من خلفية سفاري بعد ما ينقطع
+  // اتصاله فعلياً وتُمسح بياناته بالكامل (onDisconnect)، ويعيد
+  // تسجيل الحذف التلقائي لأن الاتصال الجديد يفقد التسجيل القديم.
+  useEffect(() => {
+    if (!authReady) return;
+    const id = playerIdRef.current;
+    if (!id) return;
+
+    const playerRef = ref(db, `players/${id}`);
+
+    const sendHeartbeat = () => {
+      const updates = { lastSeen: Date.now() };
+      if (selfInfoRef.current?.name) {
+        updates.name = selfInfoRef.current.name;
+      }
+      if (selfInfoRef.current?.avatar) {
+        updates.avatar = selfInfoRef.current.avatar;
+      }
+      update(playerRef, updates);
+      onDisconnect(playerRef).remove();
+    };
+
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 15000);
+    return () => clearInterval(interval);
+  }, [authReady]);
 
   // =========================================================
   // حالة اللعبة
@@ -486,6 +520,10 @@ export default function GamePage() {
             data[playerIdRef.current]
               .score || 0
           );
+          selfInfoRef.current = {
+            name: data[playerIdRef.current].name,
+            avatar: data[playerIdRef.current].avatar,
+          };
         }
       }
     );
@@ -778,9 +816,11 @@ export default function GamePage() {
         type="button"
         style={styles.muteBtn}
         onClick={() =>
-          setMuted(
-            (m) => !m
-          )
+          setMuted((m) => {
+            const next = !m;
+            sessionStorage.setItem("musicMuted", String(next));
+            return next;
+          })
         }
       >
         {muted
