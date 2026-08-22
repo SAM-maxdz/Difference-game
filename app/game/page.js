@@ -1665,12 +1665,18 @@ const styles = {
     display:
       "flex",
     justifyContent:
-      "center",
+      "flex-start",
     gap: 10,
     flexWrap:
-      "wrap",
+      "nowrap",
+    overflowX:
+      "auto",
+    WebkitOverflowScrolling:
+      "touch",
     margin:
       "10px 0",
+    padding:
+      "2px 4px 6px",
   },
 
   seat: {
@@ -1680,6 +1686,7 @@ const styles = {
       "column",
     alignItems:
       "center",
+    flexShrink: 0,
     background:
       "rgba(255,255,255,0.07)",
     borderRadius:
