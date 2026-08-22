@@ -321,7 +321,7 @@ export default function Home() {
             </span>
 
             <strong>
-              {playersList.length} / 10 PLAYERS
+              {playersList.length} PLAYERS
             </strong>
           </div>
 
@@ -489,7 +489,7 @@ export default function Home() {
         </div>
 
         <div className="players">
-          UP TO 10 PLAYERS
+          PRIVATE TABLE
         </div>
 
       </section>
