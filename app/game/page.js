@@ -748,11 +748,8 @@ export default function GamePage() {
       })
     );
 
-  const topSeats =
-    playersList.slice(0, 5);
-
-  const bottomSeats =
-    playersList.slice(5, 10);
+  const allSeats =
+    playersList.slice(0, 10);
 
   const sortedLeaderboard =
     [...playersList].sort(
@@ -959,7 +956,7 @@ export default function GamePage() {
           {!roundEnded && (
             <SeatRow
               seats={
-                topSeats
+                allSeats
               }
             />
           )}
@@ -1235,16 +1232,6 @@ export default function GamePage() {
                 }
               />
             </div>
-          )}
-
-          {/* المقاعد السفلية */}
-
-          {!roundEnded && (
-            <SeatRow
-              seats={
-                bottomSeats
-              }
-            />
           )}
 
           {/* رسالة حالة اللاعب */}
