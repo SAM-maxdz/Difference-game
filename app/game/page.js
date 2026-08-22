@@ -37,7 +37,7 @@ export default function GamePage() {
       : false
   );
   const [zoomSrc, setZoomSrc] = useState(null);
-  const [joinToast, setJoinToast] = useState(null);
+  const [joinToasts, setJoinToasts] = useState([]);
 
   const playerIdRef = useRef(null);
   const knownPlayerIds = useRef(new Set());
@@ -488,16 +488,23 @@ export default function GamePage() {
               knownPlayerIds.current
                 .size > 0
             ) {
-              setJoinToast(
-                `🎉 ${p.name} انضم للعبة`
-              );
+              const toastKey = `${id}-${Date.now()}`;
 
-              setTimeout(
-                () => {
-                  setJoinToast(null);
+              setJoinToasts((prev) => [
+                ...prev,
+                {
+                  key: toastKey,
+                  text: `🎉 ${p.name} انضم للعبة`,
                 },
-                3000
-              );
+              ]);
+
+              setTimeout(() => {
+                setJoinToasts((prev) =>
+                  prev.filter(
+                    (t) => t.key !== toastKey
+                  )
+                );
+              }, 3000);
             }
 
             knownPlayerIds.current.add(
@@ -748,9 +755,11 @@ export default function GamePage() {
       })
     );
 
-  // لا يوجد سقف على عدد اللاعبين المعروضين — الصف قابل للسحب
-  // أفقياً أصلاً ويتحمّل أي عدد.
-  const allSeats = playersList;
+  // ترتيب المقاعد حسب النقاط تنازلياً — المتقدم بالنقاط يظهر
+  // أولاً (أقصى اليسار)، وليس حسب ترتيب الانضمام الخام.
+  const allSeats = [...playersList].sort(
+    (a, b) => (b.score || 0) - (a.score || 0)
+  );
 
   const sortedLeaderboard =
     [...playersList].sort(
@@ -828,13 +837,13 @@ export default function GamePage() {
 
       {/* إشعار دخول لاعب */}
 
-      {joinToast && (
-        <div
-          style={
-            styles.joinToast
-          }
-        >
-          {joinToast}
+      {joinToasts.length > 0 && (
+        <div style={styles.joinToastStack}>
+          {joinToasts.map((t) => (
+            <div key={t.key} style={styles.joinToast}>
+              {t.text}
+            </div>
+          ))}
         </div>
       )}
 
@@ -1557,12 +1566,16 @@ const styles = {
       "pointer",
   },
 
-  joinToast: {
-    position:
-      "fixed",
+  joinToastStack: {
+    position: "fixed",
     top: 20,
     right: 20,
     zIndex: 30,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  joinToast: {
     background:
       "rgba(0,0,0,0.75)",
     border:
