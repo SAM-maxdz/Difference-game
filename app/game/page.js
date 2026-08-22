@@ -748,8 +748,9 @@ export default function GamePage() {
       })
     );
 
-  const allSeats =
-    playersList.slice(0, 10);
+  // لا يوجد سقف على عدد اللاعبين المعروضين — الصف قابل للسحب
+  // أفقياً أصلاً ويتحمّل أي عدد.
+  const allSeats = playersList;
 
   const sortedLeaderboard =
     [...playersList].sort(
