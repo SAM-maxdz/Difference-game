@@ -6,6 +6,7 @@ import { db, auth } from "../lib/firebase";
 import {
   ref,
   set,
+  update,
   onValue,
   onDisconnect,
   remove,
@@ -34,9 +35,37 @@ export default function Home() {
   const [joined, setJoined] = useState(false);
   const [players, setPlayers] = useState({});
   const [gameStatus, setGameStatus] = useState("waiting");
+  const [locked, setLocked] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [muted, setMuted] = useState(false);
 
   const playerIdRef = useRef(null);
+  const musicRef = useRef(null);
+
+  // قراءة تفضيل كتم الموسيقى من الجلسة (يبقى متزامناً مع صفحة اللعبة)
+  useEffect(() => {
+    setMuted(sessionStorage.getItem("musicMuted") === "true");
+  }, []);
+
+  // تشغيل/إيقاف موسيقى الخلفية — نفس الملف المستخدم داخل اللعبة،
+  // فتبدأ من واجهة الدخول وتستمر بلا انقطاع محسوس عبر كل الموقع.
+  useEffect(() => {
+    if (!musicRef.current) return;
+    musicRef.current.volume = 0.25;
+    if (muted) {
+      musicRef.current.pause();
+    } else {
+      musicRef.current.play().catch(() => {});
+    }
+  }, [muted]);
+
+  function toggleMuted() {
+    setMuted((m) => {
+      const next = !m;
+      sessionStorage.setItem("musicMuted", String(next));
+      return next;
+    });
+  }
 
   // تسجيل دخول مجهول (Anonymous) تلقائي — لازم قبل أي قراءة/كتابة
   // لأن قواعد Firebase الآن تمنع أي وصول بدون تسجيل دخول.
@@ -79,6 +108,34 @@ export default function Home() {
     return () => unsubscribe();
   }, [authReady]);
 
+  // نبضة حياة (heartbeat): طول ما اللاعب داخل قاعة الانتظار، نعيد
+  // كتابة اسمه وصورته ووقت آخر ظهور له كل 15 ثانية — وليس وقت
+  // الظهور فقط. هذا يصلّح تلقائياً حالة رجوعه من خلفية سفاري بعد
+  // ما ينقطع اتصاله فعلياً وتُمسح بياناته بالكامل (onDisconnect)،
+  // وأيضاً يسمح للوحة المضيف بمعرفة اللاعبين "المعلّقين" فعلاً.
+  useEffect(() => {
+    if (!joined || !authReady) return;
+    const id = playerIdRef.current;
+    if (!id) return;
+
+    const playerRef = ref(db, `players/${id}`);
+
+    const sendHeartbeat = () => {
+      update(playerRef, {
+        name: name.trim(),
+        avatar,
+        lastSeen: Date.now(),
+      });
+      // نعيد تسجيل الحذف التلقائي عند الانقطاع في كل نبضة، لأن أي
+      // اتصال جديد (بعد رجوع من الخلفية) يفقد التسجيل القديم.
+      onDisconnect(playerRef).remove();
+    };
+
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 15000);
+    return () => clearInterval(interval);
+  }, [joined, authReady]);
+
   // استعادة حالة "joined" تلقائياً بعد تحديث الصفحة (refresh)
   // إذا كان اللاعب موجوداً أصلاً في قائمة اللاعبين بقاعدة البيانات،
   // بدل ما يرجع لشاشة إدخال الاسم والصورة من الصفر ويفقد مكانه.
@@ -109,6 +166,19 @@ export default function Home() {
     return () => unsubscribe();
   }, [authReady]);
 
+  // مراقبة حالة قفل اللعبة — لها أولوية على كل شي آخر
+  useEffect(() => {
+    if (!authReady) return;
+
+    const lockedRef = ref(db, "game/locked");
+
+    const unsubscribe = onValue(lockedRef, (snapshot) => {
+      setLocked(snapshot.val() === true);
+    });
+
+    return () => unsubscribe();
+  }, [authReady]);
+
   // =====================================================
   // الانتقال إلى اللعبة
   // =====================================================
@@ -122,11 +192,12 @@ export default function Home() {
   // ثم الصور.
   //
   useEffect(() => {
-    if (joined && gameStatus !== "waiting") {
+    if (joined && !locked && gameStatus !== "waiting") {
       router.push("/game");
     }
   }, [
     joined,
+    locked,
     gameStatus,
     router,
   ]);
@@ -176,6 +247,51 @@ export default function Home() {
     Object.entries(players);
 
   // =====================================================
+  // اللعبة مقفلة — أولوية مطلقة على أي شاشة أخرى
+  // =====================================================
+
+  if (locked) {
+    return (
+      <main className="casino">
+        <div className="stars"></div>
+        <div className="glow glow1"></div>
+        <div className="glow glow2"></div>
+        <audio ref={musicRef} loop src="/sounds/casino-music.mp3" />
+        <button onClick={toggleMuted} style={styles.muteBtn}>
+          {muted ? "🔇" : "🔊"}
+        </button>
+        <section className="hero">
+          <div className="logo">♠ ♥ ♦ ♣</div>
+          <h1 className="brand-title">
+            <span className="brand-text">FHDxNJD</span>
+          </h1>
+          <div
+            style={{
+              marginTop: 30,
+              fontSize: 40,
+            }}
+          >
+            🔒
+          </div>
+          <p
+            style={{
+              color: "#f4ce67",
+              fontSize: 18,
+              letterSpacing: 2,
+              marginTop: 10,
+            }}
+          >
+            اللعبة مقفلة الآن
+          </p>
+          <p style={{ color: "rgba(255,255,255,0.45)" }}>
+            انتهت الجلسة الحالية. تواصل مع المضيف إذا كنت تنتظر جولة جديدة.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  // =====================================================
   // WAITING LOBBY
   // =====================================================
 
@@ -187,6 +303,11 @@ export default function Home() {
         <div className="glow glow1"></div>
 
         <div className="glow glow2"></div>
+
+        <audio ref={musicRef} loop src="/sounds/casino-music.mp3" />
+        <button onClick={toggleMuted} style={styles.muteBtn}>
+          {muted ? "🔇" : "🔊"}
+        </button>
 
         <section className="lobby">
 
@@ -267,6 +388,11 @@ export default function Home() {
       <div className="glow glow1"></div>
 
       <div className="glow glow2"></div>
+
+      <audio ref={musicRef} loop src="/sounds/casino-music.mp3" />
+      <button onClick={toggleMuted} style={styles.muteBtn}>
+        {muted ? "🔇" : "🔊"}
+      </button>
 
       <section className="hero">
 
@@ -371,3 +497,20 @@ export default function Home() {
     </main>
   );
 }
+
+const styles = {
+  muteBtn: {
+    position: "fixed",
+    top: 16,
+    left: 16,
+    zIndex: 20,
+    background: "rgba(0,0,0,0.5)",
+    border: "1px solid #444",
+    borderRadius: "50%",
+    width: 44,
+    height: 44,
+    fontSize: 20,
+    color: "#fff",
+    cursor: "pointer",
+  },
+};
